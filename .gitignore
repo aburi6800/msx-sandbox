@@ -1,0 +1,5 @@
+asm01/*.ihx
+asm01/*.lst
+asm01/*.map
+asm01/*.o
+asm01/*.sym
