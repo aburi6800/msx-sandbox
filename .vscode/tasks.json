@@ -1,0 +1,56 @@
+{
+    // .vscode/tasks.json
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Assemble",
+            "type": "shell",
+            "linux": {
+                "command": "zcc",
+                "args": [
+                    "+msx",
+                    "-subtype=rom",
+                    "-create-app",
+                    "-vn",
+                    "-s",
+                    "-m",
+                    "-o",
+                    "${fileDirname}/${fileBasenameNoExtension}.rom",
+                    "${fileDirname}/${fileBasename}"
+                ]
+            }
+        },
+        {
+            "label": "Assemble(no-crt)",
+            "type": "shell",
+            "linux": {
+                "command": "zcc",
+                "args": [
+                    "+msx",
+                    "-subtype=rom",
+                    "-create-app",
+                    "-vn",
+                    "--no-crt",
+                    "-s",
+                    "-m",
+                    "-o",
+                    "${fileDirname}/${fileBasenameNoExtension}.rom",
+                    "${fileDirname}/${fileBasename}"
+                ]
+            }
+        },
+        {
+            "label": "Clean",
+            "type": "shell",
+            "linux": {
+                "command": "rm",
+                "args": [
+                    "${fileDirname}/${fileBasenameNoExtension}*.map",
+                    "${fileDirname}/${fileBasenameNoExtension}*.sym",
+                    "${fileDirname}/${fileBasenameNoExtension}*.rom",
+                    "${fileDirname}/${fileBasenameNoExtension}*.bin"
+                ]
+            }
+        },
+    ]
+}
