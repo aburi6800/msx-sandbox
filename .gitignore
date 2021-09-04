@@ -2,4 +2,12 @@ asm01/*.ihx
 asm01/*.lst
 asm01/*.map
 asm01/*.o
+asm01/*.bin
+asm01/*.rel
 asm01/*.sym
+asm01/*.err
+asm03/*.o
+asm03/*.bin
+asm03/*.rom
+asm03/*.sym
+asm03/*.map
