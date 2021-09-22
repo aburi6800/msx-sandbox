@@ -434,27 +434,7 @@ ROUND_INIT:
     POP HL
     ADD HL,BC                   ; HL=HL+BC
 
-    ; ■フィールド描画
-    ; 今はデータをそのままVRAMにブロック転送して表示する
-;    LD B,$00                    ; BC <- $0040 (表示開始VRAMアドレスのオフセット値)
-;    LD C,$40                    
-
-;    LD HL,PTN_NAME_ADDR         ; DE <- パターンネームテーブルの先頭アドレス
-;    ADD HL,BC
-
-;    PUSH HL                     ; DE <- VRAM転送先のアドレス
-;    POP DE
-
-;    POP HL                      ; HL <- 転送元データのアドレス(スタックから取得)
-
-;    LD BC,32*22                 ; BC <- 転送データサイズ
-
-;    CALL LDIRVM                 ; BIOS VRAMブロック転送
-
-
-    ; ■フィールド描画ループ処理
-    ; 右下端=$1B00
-    ; 左上端=$1840
+    ; ■フィールド描画ループ回数設定
     LD B,176                    ; フィールドデータカウント (176byte)
     
 ROUND_INIT_L1:
@@ -482,7 +462,27 @@ ROUND_INIT_L2:
     JP ROUND_INIT_L32           ; データ=1の描画
 
 ROUND_INIT_L31:    
-    ; なにも処理なし
+    ; 空白を描画(左上)
+    LD HL,(VRAM_ADDR_WK)        ; HL <- VRAMアドレスワーク
+    LD A,' '
+    CALL WRTVRM
+
+    ; 空白を描画(右上)
+    INC HL                      ; HL=HL+1
+    LD A,' '
+    CALL WRTVRM
+
+    ; 空白を描画(左下)
+    LD DE,31                    ; HL=HL+31
+    ADD HL,DE                   
+    LD A,' '
+    CALL WRTVRM
+
+    ; 空白を描画(右下)
+    INC HL                      ; HL=HL+1
+    LD A,' '
+    CALL WRTVRM
+
     JR ROUND_INIT_L4
 
 ROUND_INIT_L32:    
@@ -523,6 +523,7 @@ ROUND_INIT_L4:
     SLA A
     JR NZ,ROUND_INIT_L5         ; ゼロではない(=16の倍数でない)場合はROUND_INIT_L5へ
 
+    OR A                        ; キャリーフラグをOFF
     LD DE,32                    ; HL=HL-32
     SBC HL,DE
 
@@ -1205,6 +1206,7 @@ ROUND_1:
     DB 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
     DB 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1
 
+    ; 2byte x 11 = 22byte
 ;    DW $FFFF,$0000,$E007,$F81F,$FC3F
 ;    DW $FFFF,$FC3F,$F81F,$E007,$0000
 ;    DW $FFFF
