@@ -8,28 +8,402 @@ _main:
 ; ====================================================================================================
 ; 初期処理
 ; ====================================================================================================
-    CALL INIT                   ; 初期設定
+    CALL INIT                       ; 初期設定
 
-    ; テスト
-    LD HL,STRING1
-    CALL PRTSTR
+    ; ■ゲーム状態をタイトル初期化に変更
+    LD A,STATE_TITLE
+    CALL CHANGE_STATE
 
-    LD HL,STRING2
-    CALL PRTSTR
-
-    LD HL,STRING3
-    CALL PRTSTR
-
-    ; フィールド描画
-    CALL GAME_INIT
-    CALL ROUND_INIT
 
 ; ====================================================================================================
 ; メインループ
 ; ====================================================================================================
 MAINLOOP:
+    ; ■経過時間をカウントアップ
+    CALL TICK_COUNT
+    PUSH AF
 
-    ; ■プレイヤー操作処理
+    ; ■ゲーム状態の値からジャンプテーブルアドレスのオフセット値を求める
+    LD A,(GAME_STATE)               ; A <- ゲーム状態
+    LD C,A                          ; A=A*3
+    ADD A,A
+    ADD A,C
+
+    LD B,0                          ; BC <- ジャンプテーブルのオフセット値
+    LD C,A
+
+    ; ■ジャンプテーブルの該当ステップにジャンプ
+    POP AF
+    LD HL,MAINLOOP_L1               ; HL <- ジャンプテーブルのアドレス
+    ADD HL,BC                       ; HL=HL+BC
+    JP (HL)
+
+MAINLOOP_L1:
+    JP TITLE                        ; ゲーム状態：タイトル
+    JP GAME_INIT                    ; ゲーム状態：ゲーム初期化
+    JP ROUND_START                  ; ゲーム状態：ラウンド開始
+    JP GAME_MAIN                    ; ゲーム状態：ゲームメイン
+    JP PLAYER_MISS                  ; ゲーム状態：プレイヤーミス
+    JP OVER_INIT                    ; ゲーム状態：ゲームオーバー初期化
+    JP OVER                         ; ゲーム状態：ゲームオーバー
+    JP ROUND_CLEAR                  ; ゲーム状態：ラウンドクリアー
+
+MAINLOOP_RET:
+VSYNC:
+	; ■垂直帰線待ち
+	HALT
+
+    ; ■キー入力値取得
+    CALL GET_CONTROL
+
+	JR MAINLOOP
+
+
+; ====================================================================================================
+; キー入力値取得サブルーチン
+; ====================================================================================================
+GET_CONTROL:
+    CALL KILBUF                     ; BIOS キーバッファクリア
+    OR A                            ; キャリーフラグクリア
+
+    ; ■プレイヤー操作データ(STICK)を取得
+    LD A,0                          ; A <- ジョイスティック番号=0(キーボード)
+    CALL GTSTCK                     ; BIOS ジョイスティックの状態取得
+                                    ; - Aレジスタに入力値が設定されている
+    LD B,A                          ; B <- A
+
+    LD A,1                          ; A <- ジョイスティック番号=1(パッド1)
+    CALL GTSTCK                     ; ジョイスティック入力取得
+    OR B                            ; A=A OR B
+                                    ; - キーボードとパッドの入力の OR を取る
+                                    ;   最大で15となる
+
+    LD (INPUT_BUFF_STICK), A        ; 現在の入力値を保存
+
+    ; ■プレイヤー操作データ(STRIG)を取得
+    LD D,0                          ; D <- 0
+    LD A,0                          ; A <- ジョイスティック番号=0(キーボード)
+    CALL GTTRIG                     ; BIOS トリガボタンの状態取得
+                                    ; - $00 = 押されていない
+                                    ; - $0FF = 押されている
+    OR A
+    JR Z,GET_CONTROL_L1
+    LD D,1                          ; D <- 1
+
+GET_CONTROL_L1:
+    LD E,0                          ; E <- 0
+    LD A,1                          ; A <- ジョイスティック番号=0(パッド1)
+    CALL GTTRIG                     ; BIOS トリガボタンの状態取得
+    OR A
+    JR Z,GET_CONTROL_L2
+    LD E,1                          ; E <- 1
+
+GET_CONTROL_L2:
+    LD A,D                          ; A=D OR E
+    OR E                            
+
+    LD (INPUT_BUFF_STRIG), A        ; 現在の入力値を保存
+
+GET_CONTROL_EXIT:
+    RET
+
+
+; ====================================================================================================
+; ゲーム状態変更
+; IN A  : 変更するゲーム状態の値
+; ====================================================================================================
+CHANGE_STATE:
+    LD (GAME_STATE),A
+    CALL TICK_RESET
+
+CHANGE_STATE_EXIT:
+    RET
+
+
+; ====================================================================================================
+; 経過時間リセット
+; ====================================================================================================
+TICK_RESET:
+    LD A,0                          ; A <- 0
+    LD (TICK+0),A
+    LD (TICK+1),A
+
+TICK_RESET_EXIT:
+    RET
+
+
+; ====================================================================================================
+; 経過時間カウント
+; ====================================================================================================
+TICK_COUNT:
+    LD HL,(TICK)                    ; HL <- TICKの値
+
+    LD A,H                          ; HL=0の場合、ゼロフラグが立つ
+    OR L
+
+    INC HL                          ; TICKをカウントアップ
+    JR Z,TICK_COUNT_L1              ; ゼロフラグが立っていたら次の処理へ
+
+    LD A,H                          ; ゼロでなければ次の処理へ
+    OR L
+    JR NZ,TICK_COUNT_L1
+
+    LD L,1                          ; 1にリセット
+    LD H,0
+
+TICK_COUNT_L1:
+    LD (TICK),HL
+
+TICK_COUNT_EXIT:
+    RET
+
+
+; ====================================================================================================
+; タイトル
+; ====================================================================================================
+TITLE:
+    ; ■初回のみ初期化を実行
+    JR Z,TITLE_INIT
+
+    ; ■スペースキーが押されたら状態変更
+    LD A,(INPUT_BUFF_STRIG)     ; A <- トリガボタンの入力値
+
+    OR A                        ; ゼロ(未入力)なら抜ける
+    JR Z,TITLE_EXIT
+
+    LD A,STATE_GAME_INIT        ; ゲーム状態 <- ゲーム開始
+    CALL CHANGE_STATE
+
+TITLE_EXIT:
+    JP MAINLOOP_RET
+
+
+; ----------------------------------------------------------------------------------------------------
+; タイトル初期化
+; ----------------------------------------------------------------------------------------------------
+TITLE_INIT:
+    ; ■各変数初期化
+    LD A,0
+    LD (ROUND),A                    ; ラウンド数 <- 0
+
+    ; ■タイトル画面作成
+    CALL DRAW_MAP                   ; フィールド描画
+
+    LD HL,TITLE1
+    CALL PRTSTR
+    LD HL,TITLE2
+    CALL PRTSTR
+    LD HL,TITLE3
+    CALL PRTSTR
+    LD HL,TITLE4
+    CALL PRTSTR
+
+TITLE_INIT_EXIT:
+    JP MAINLOOP_RET
+
+
+; ====================================================================================================
+; ゲーム初期化
+; ====================================================================================================
+GAME_INIT:
+    ; ■乱数初期化
+    CALL INIT_RND
+
+    ; ■各変数初期化
+    LD A,1
+    LD (ROUND),A                    ; ラウンド数 <- 1
+    LD A,0
+    LD (SCORE),A                    ; スコア <- 0
+    LD A,3
+    LD (LEFT),A                     ; 残機 <- 3
+
+    LD A,STATE_ROUND_START          ; ゲーム状態 <- ラウンド開始
+    CALL CHANGE_STATE
+
+GAME_INIT_EXIT:
+    JP MAINLOOP_RET
+
+
+; ====================================================================================================
+; ラウンド開始
+; ====================================================================================================
+ROUND_START:
+    ; ■初回のみの処理実行
+    JR Z,ROUND_START_INIT
+
+    ; ■TICKが300カウント(=5秒)経過してなければ抜ける
+    LD BC,300
+    LD HL,(TICK)    
+    SBC Hl,BC
+    JR NZ,ROUND_START_EXIT
+
+ROUND_START_l1:
+    ; ■マップ描画
+    CALL DRAW_MAP
+
+    ; ■プレイヤー初期化
+    CALL INIT_PLAYER
+
+    ; ■ボール初期化
+    CALL INIT_BALL
+
+    ; ■ゲーム状態変更
+    LD A,STATE_GAME_MAIN            ; ゲーム状態 <- ゲームメイン
+    CALL CHANGE_STATE
+
+ROUND_START_EXIT:
+    JP MAINLOOP_RET
+
+ROUND_START_INIT:
+    LD HL,$1800+32*2                ; 書き込み開始アドレス
+    LD BC,32*22                     ; 書き込みデータ長
+    LD A,$20                        ; 書き込むデータ
+    CALL FILVRM                     ; BIOS VRAM指定領域同一データ転送
+
+    LD HL,STRING_ROUND_START
+    CALL PRTSTR
+
+    JP MAINLOOP_RET
+
+
+; ====================================================================================================
+; マップデータ描画サブルーチン
+; 予め、メモリの(ROUND)にラウンド数を入れておくこと
+; ====================================================================================================
+DRAW_MAP:
+    ; ■VRAMアドレスワーク設定
+    LD H,$1A                        ; 書き込み開始VRAMアドレス = $1ADE
+    LD L,$DE
+    LD (VRAM_ADDR_WK),HL
+
+    ; ■ラウンドテーブルのオフセット値算出
+    LD A,(ROUND)                    ; A <- ラウンド数
+    RLCA                            ; A=A*2
+    LD B,0                          ; BC <- A
+    LD C,A
+
+    ; ■ラウンドデータの取得先アドレス算出
+    ; - 遡って取得するので、末端のアドレスを算出する
+    LD HL,ROUND_TBL                 ; HL <- ラウンドテーブルの取得先アドレス
+    ADD HL,BC                       ; HL=HL+BC
+
+    LD E,(HL)                       ; DE <- (HL) ラウンドデータの先頭アドレス
+    INC HL
+    LD D,(HL)
+    LD BC,175                       ; BC <- ラウンドデータのbyte数
+    PUSH DE
+    POP HL
+    ADD HL,BC                       ; HL=HL+BC
+
+    ; ■フィールド描画ループ回数設定
+    LD B,176                        ; フィールドデータカウント (176byte)
+    
+DRAW_MAP_L1:
+    PUSH HL                         ; ラウンドデータの取得先アドレスをスタックに退避
+    PUSH BC                         ; フィールドデータカウントをスタックに退避
+
+    ; ■ラウンドデータからマップチップデータを取得
+    LD A,(HL)                       ; A <- (HL)   
+
+    ; ■取得した値からジャンプテーブルアドレスのオフセット値を求める
+    LD C,A                          ; A=A*3
+    ADD A,A
+    ADD A,C
+
+    LD B,0                          ; BC <- ジャンプテーブルのオフセット値
+    LD C,A
+
+    ; ■ジャンプテーブルの該当ステップにジャンプ
+    LD HL,DRAW_MAP_L2               ; HL <- ジャンプテーブルのアドレス
+    ADD HL,BC                       ; HL=HL+BC
+    JP (HL)
+
+DRAW_MAP_L2:
+    JP DRAW_MAP_L31                 ; データ=0の描画
+    JP DRAW_MAP_L32                 ; データ=1の描画
+
+DRAW_MAP_L31:
+    ; 空白を描画(左上)
+    LD HL,(VRAM_ADDR_WK)            ; HL <- VRAMアドレスワーク
+    LD A,' '
+    CALL WRTVRM
+
+    ; 空白を描画(右上)
+    INC HL                          ; HL=HL+1
+    LD A,' '
+    CALL WRTVRM
+
+    ; 空白を描画(左下)
+    LD DE,31                        ; HL=HL+31
+    ADD HL,DE                   
+    LD A,' '
+    CALL WRTVRM
+
+    ; 空白を描画(右下)
+    INC HL                          ; HL=HL+1
+    LD A,' '
+    CALL WRTVRM
+
+    JR DRAW_MAP_L4
+
+DRAW_MAP_L32:
+    ; 床を描画(左上)
+    LD HL,(VRAM_ADDR_WK)            ; HL <- VRAMアドレスワーク
+    LD A,'a'
+    CALL WRTVRM
+
+    ; 床を描画(右上)
+    INC HL                          ; HL=HL+1
+    LD A,'a'
+    CALL WRTVRM
+
+    ; 床を描画(左下)
+    LD DE,31                        ; HL=HL+31
+    ADD HL,DE                   
+    LD A,'a'
+    CALL WRTVRM
+
+    ; 床を描画(右下)
+    INC HL                          ; HL=HL+1
+    LD A,'a'
+    CALL WRTVRM
+
+    JR DRAW_MAP_L4
+
+DRAW_MAP_L4:
+    LD HL,(VRAM_ADDR_WK)            ; HL <- VRAMアドレスワーク
+    DEC HL                          ; HL=HL-2
+    DEC HL
+
+    POP BC                          ; BC <- スタック(フィールドデータカウント)
+    LD A,B                          ; Bレジスタを左に4ビットシフト
+    DEC A
+    SLA A
+    SLA A
+    SLA A
+    SLA A
+    JR NZ,DRAW_MAP_L5               ; ゼロではない(=16の倍数でない)場合はDRAW_MAP_L5へ
+
+    OR A                            ; キャリーフラグをOFF
+    LD DE,32                        ; HL=HL-32
+    SBC HL,DE
+
+DRAW_MAP_L5:
+    LD (VRAM_ADDR_WK),HL            ; HL -> VRAMアドレスワーク
+
+    POP HL                          ; HL <- スタック(ラウンドデータの取得先アドレス)
+    DEC HL
+    DJNZ DRAW_MAP_L1
+
+DRAW_MAP_EXIT:
+    RET
+
+
+; ====================================================================================================
+; ゲームメイン
+; ====================================================================================================
+GAME_MAIN:
+    ; ■プレイヤー処理
     CALL PLAYER_UPDATE
 
     ; ■ボール処理
@@ -38,15 +412,12 @@ MAINLOOP:
     ; ■画面更新
     CALL DRAW
 
-VSYNC:
-	; ■垂直帰線待ち
-	HALT
-
-	JR MAINLOOP
+GAME_MAIN_EXIT:
+    JP MAINLOOP_RET
 
 
 ; ====================================================================================================
-; プレイヤー操作処理
+; プレイヤー処理サブルーチン
 ; ====================================================================================================
 PLAYER_UPDATE:
     ; ■プレイヤーミスカウント判定
@@ -81,18 +452,15 @@ PLAYER_UPDATE_EXIT:
     RET
 
 ; ----------------------------------------------------------------------------------------------------
-; プレイヤー操作
+; プレイヤー操作サブルーチン
 ; ----------------------------------------------------------------------------------------------------
 PLAYER_CONTROL:
     ; ■対象のスプライトキャラクターワークテーブルの先頭アドレスを取得
     LD B,0                          ; B <- ゼロ（プレイヤーのスプライトキャラクター番号）
     CALL GET_SPR_WK_ADDR            ; IX <- スプライトキャラクターワークテーブルのアドレス
 
-    ; ■プレイヤー操作データ(STICK)を取得
-    ;   本来はジョイスティックの入力も取得してOR演算する必要がある
-    ;   その場合、キーボードとジョイスティックの両方を同時に入力した場合、
-    ;   最大で16nになるため、ジャンプテーブルはそれを考慮したものとする
-    CALL GET_STICK
+    ; ■A <- 操作入力データ（方向）
+    LD A,(INPUT_BUFF_STICK)
 
     ; ■入力データをスプライトキャラクターワークテーブルに保存
     LD (IX+7),A
@@ -102,10 +470,11 @@ PLAYER_CONTROL:
     ; ■スプライトパターン番号更新
     CALL PLAYER_ANIM
 
+PLAYER_CTRL_EXIT:
     RET
 
 ; ----------------------------------------------------------------------------------------------------
-; プレイヤーヒットチェック
+; プレイヤーヒットチェックサブルーチン
 ; ----------------------------------------------------------------------------------------------------
 PLAYER_HITCHECK:
     ; ■プレイヤーキャラクターのY座標から、オフセットアドレスを求める
@@ -156,7 +525,7 @@ PLAYER_HITCHECK_EXIT:
 
 
 ; ----------------------------------------------------------------------------------------------------
-; スプライトパターン番号更新
+; スプライトパターン番号更新サブルーチン
 ; IN  : B = スプライトキャラクター番号
 ; ----------------------------------------------------------------------------------------------------
 PLAYER_ANIM:
@@ -191,7 +560,7 @@ PLAYER_ANIM_EXIT:
 
 
 ; ====================================================================================================
-; ボール移動処理
+; ボール処理サブルーチン
 ; ====================================================================================================
 BALL_UPDATE:
     LD B,MAX_BALL_CNT               ; B <- ボールの最大キャラクター数                                ; ここは面ごとの数を設定したい
@@ -206,7 +575,7 @@ BALL_UPDATE_L1:
 
     ; ■ボール移動
     CALL SPRITE_MOVE                ; スプライトキャラクター移動処理
-    CALL BALL_BOUND                 ; ボールバウンド処理
+    CALL BALL_BOUND                 ; ボールバウンド
 
     ; ■ヒット判定
     LD A,(PLAYER_MISS_CNT)          ; プレイヤーミスカウント<>0なら衝突判定はしないで次のループ処理へ
@@ -227,7 +596,7 @@ BALL_UPDATE_L2:
     RET 
 
 ; ----------------------------------------------------------------------------------------------------
-; ボールバウンド処理
+; ボールバウンドサブルーチン
 ; 事前にIXにスプライトキャラクターワークテーブルの先頭アドレスを設定済であること
 ; ----------------------------------------------------------------------------------------------------
 BALL_BOUND:
@@ -311,6 +680,46 @@ BALL_BOUND_L4:
 
 BALL_BOUND_EXIT:
     RET
+
+
+; ====================================================================================================
+; プレイヤーミス
+; ====================================================================================================
+PLAYER_MISS:
+
+
+PLAYER_MISS_EXIT:
+    JP MAINLOOP_RET
+
+
+; ====================================================================================================
+; ゲームオーバー初期化
+; ====================================================================================================
+OVER_INIT:
+
+
+OVER_INIT_EXIT:
+    JP MAINLOOP_RET
+
+
+; ====================================================================================================
+; ゲームオーバー
+; ====================================================================================================
+OVER:
+
+
+OVER_EXIT:
+    JP MAINLOOP_RET
+
+
+; ====================================================================================================
+; ラウンドクリアー
+; ====================================================================================================
+ROUND_CLEAR:
+
+
+ROUND_CLEAR_EXIT:
+    JP MAINLOOP_RET
 
 
 ; ====================================================================================================
@@ -410,20 +819,20 @@ HIT_CHECK:
     OR A
 
     ; ■Y座標の比較
-    LD A,(IX+1)                 ; 比較元のY座標
-    INC HL                      ; 比較先のY座標
+    LD A,(IX+1)                     ; 比較元のY座標
+    INC HL                          ; 比較先のY座標
     LD B,(HL)                   
-    CALL ABS_SUB                ; 差分を絶対値で取得
-    CP 10                       ; A < 10 の場合はキャリーフラグが立つ
-    JR NC,HIT_CHECK_EXIT        ; キャリーフラグが立っていない場合は終了
+    CALL ABS_SUB                    ; 差分を絶対値で取得
+    CP 10                           ; A < 10 の場合はキャリーフラグが立つ
+    JR NC,HIT_CHECK_EXIT            ; キャリーフラグが立っていない場合は終了
 
     ; ■X座標の比較
-    LD A,(IX+3)                 ; 比較元のX座標
-    INC HL                      ; 比較先のX座標
+    LD A,(IX+3)                     ; 比較元のX座標
+    INC HL                          ; 比較先のX座標
     INC HL
     LD B,(HL)
-    CALL ABS_SUB                ; 差分を絶対値で取得
-    CP 10                       ; A < 10 の場合はキャリーフラグが立つ
+    CALL ABS_SUB                    ; 差分を絶対値で取得
+    CP 10                           ; A < 10 の場合はキャリーフラグが立つ
 
 HIT_CHECK_EXIT:
     POP BC
@@ -444,154 +853,6 @@ DRAW:
 
 DRAW_EXIT:
     EI
-    RET
-
-
-; ====================================================================================================
-; ゲーム初期化処理
-; ====================================================================================================
-GAME_INIT:
-    LD A,1
-    LD (ROUND),A                ; ラウンド数 <- 1
-    LD A,0
-    LD (SCORE),A                ; スコア <- 0
-    LD A,3
-    LD (LEFT),A                 ; 残機 <- 3
-
-    RET
-
-
-; ====================================================================================================
-; ラウンド初期処理
-; ====================================================================================================
-ROUND_INIT:
-    ; ■VRAMアドレスワーク設定
-    LD H,$1A                    ; 書き込み開始VRAMアドレス = $1ADE
-    LD L,$DE
-    LD (VRAM_ADDR_WK),HL
-
-    ; ■ラウンドテーブルのオフセット値算出
-    LD A,(ROUND)                ; A <- ラウンド数
-    SUB 1                       ; A=A-1
-    RLCA                        ; A=A*2
-    LD B,A                      ; BC <- A
-    LD C,0
-
-    ; ■ラウンドデータの取得先アドレス算出
-    ; - 遡って取得するので、末端のアドレスを算出する
-    LD HL,ROUND_TBL             ; HL <- ラウンドテーブルの取得先アドレス
-    ADD HL,BC                   ; HL=HL+BC
-
-    LD E,(HL)                   ; DE <- (HL) ラウンドデータの先頭アドレス
-    INC HL
-    LD D,(HL)
-    LD BC,175                   ; BC <- ラウンドデータのbyte数
-    PUSH DE
-    POP HL
-    ADD HL,BC                   ; HL=HL+BC
-
-    ; ■フィールド描画ループ回数設定
-    LD B,176                    ; フィールドデータカウント (176byte)
-    
-ROUND_INIT_L1:
-    PUSH HL                     ; ラウンドデータの取得先アドレスをスタックに退避
-    PUSH BC                     ; フィールドデータカウントをスタックに退避
-
-    ; ■ラウンドデータからマップチップデータを取得
-    LD A,(HL)                   ; A <- (HL)   
-
-    ; ■取得した値からジャンプテーブルアドレスのオフセット値を求める
-    LD C,A                      ; A=A*3
-    ADD A,A
-    ADD A,C
-
-    LD B,0                      ; ジャンプテーブルのオフセット値
-    LD C,A
-
-    ; ■ジャンプテーブルの該当ステップにジャンプ
-    LD HL,ROUND_INIT_L2         ; HL <- ジャンプテーブルのアドレス
-    ADD HL,BC                   ; HL=HL+BC
-    JP (HL)
-
-ROUND_INIT_L2:    
-    JP ROUND_INIT_L31           ; データ=0の描画
-    JP ROUND_INIT_L32           ; データ=1の描画
-
-ROUND_INIT_L31:    
-    ; 空白を描画(左上)
-    LD HL,(VRAM_ADDR_WK)        ; HL <- VRAMアドレスワーク
-    LD A,' '
-    CALL WRTVRM
-
-    ; 空白を描画(右上)
-    INC HL                      ; HL=HL+1
-    LD A,' '
-    CALL WRTVRM
-
-    ; 空白を描画(左下)
-    LD DE,31                    ; HL=HL+31
-    ADD HL,DE                   
-    LD A,' '
-    CALL WRTVRM
-
-    ; 空白を描画(右下)
-    INC HL                      ; HL=HL+1
-    LD A,' '
-    CALL WRTVRM
-
-    JR ROUND_INIT_L4
-
-ROUND_INIT_L32:    
-    ; 床を描画(左上)
-    LD HL,(VRAM_ADDR_WK)        ; HL <- VRAMアドレスワーク
-    LD A,'a'
-    CALL WRTVRM
-
-    ; 床を描画(右上)
-    INC HL                      ; HL=HL+1
-    LD A,'a'
-    CALL WRTVRM
-
-    ; 床を描画(左下)
-    LD DE,31                    ; HL=HL+31
-    ADD HL,DE                   
-    LD A,'a'
-    CALL WRTVRM
-
-    ; 床を描画(右下)
-    INC HL                      ; HL=HL+1
-    LD A,'a'
-    CALL WRTVRM
-
-    JR ROUND_INIT_L4
-
-ROUND_INIT_L4:    
-    LD HL,(VRAM_ADDR_WK)        ; HL <- VRAMアドレスワーク
-    DEC HL                      ; HL=HL-2
-    DEC HL
-
-    POP BC                      ; BC <- スタック(フィールドデータカウント)
-    LD A,B                      ; Bレジスタを左に4ビットシフト
-    DEC A
-    SLA A
-    SLA A
-    SLA A
-    SLA A
-    JR NZ,ROUND_INIT_L5         ; ゼロではない(=16の倍数でない)場合はROUND_INIT_L5へ
-
-    OR A                        ; キャリーフラグをOFF
-    LD DE,32                    ; HL=HL-32
-    SBC HL,DE
-
-
-ROUND_INIT_L5:    
-    LD (VRAM_ADDR_WK),HL        ; HL -> VRAMアドレスワーク
-
-    POP HL                      ; HL <- スタック(ラウンドデータの取得先アドレス)
-    DEC HL
-    DJNZ ROUND_INIT_L1
-
-ROUND_INIT_EXIT:
     RET
 
 
@@ -667,37 +928,37 @@ SET_FONT_PATTERN:
 ; PCGパターン定義
 ; ====================================================================================================
 SET_PCG_PATTERN:
-    LD HL,PCG_PTN_DATA          ; HL <- PCGデータの先頭アドレス
+    LD HL,PCG_PTN_DATA              ; HL <- PCGデータの先頭アドレス
 
 SET_PCG_PATTERN_L1:
-    LD A,(HL)                   ; A <- PCGデータのキャラクターコード
-    OR A                        ; A=ゼロなら抜ける
+    LD A,(HL)                       ; A <- PCGデータのキャラクターコード
+    OR A                            ; A=ゼロなら抜ける
     JR Z,SET_PCG_PATTERN_EXIT
 
     ; DEレジスタにコピー先のアドレスを設定
     ; $0000+キャラクターコード*8
-    PUSH HL                     ; HLを退避
-    LD H,0                      ; HL <- A
+    PUSH HL                         ; HLを退避
+    LD H,0                          ; HL <- A
     LD L,A
-    ADD HL,HL                   ; HL=HL*8
+    ADD HL,HL                       ; HL=HL*8
     ADD HL,HL
     ADD HL,HL
-    LD D,H                      ; DE <- HL
+    LD D,H                          ; DE <- HL
     LD E,L    
     POP HL
 
     ; HLレジスタにコピー元のアドレスを設定
-    INC HL                      ; HL=HL+1
+    INC HL                          ; HL=HL+1
     
     ; BCレジスタに転送バイト数を設定
-    LD BC,8                     ; 8バイトを転送
+    LD BC,8                         ; 8バイトを転送
     PUSH BC
     PUSH HL
-    CALL LDIRVM                 ; BIOS VRAMブロック転送
+    CALL LDIRVM                     ; BIOS VRAMブロック転送
     POP HL
     POP BC
     
-    ADD HL,BC                   ; HL <- 次のPCGデータのアドレス(+8)
+    ADD HL,BC                       ; HL <- 次のPCGデータのアドレス(+8)
     JR SET_PCG_PATTERN_L1
 
 SET_PCG_PATTERN_EXIT:
@@ -708,16 +969,10 @@ SET_PCG_PATTERN_EXIT:
 ; カラーテーブル定義
 ; ====================================================================================================
 SET_COLOR_TABLE:
-    ; HLレジスタにコピー元のアドレスを設定
-    LD HL,PCG_COLOR_DATA        ; HL <- PCGカラーデータの先頭アドレス
-
-    ; DEレジスタにコピー先のアドレスを設定
-    LD DE,COLOR_TABLE_ADDR      ; DE <- カラーテーブルの先頭アドレス
-
-    ; BCレジスタに転送バイト数を設定
-    LD BC,32                    ; B <- カラーテーブルの設定先アドレス加算値
-
-    CALL LDIRVM                 ; BIOS VRAMブロック転送
+    LD HL,PCG_COLOR_DATA            ; HL <- PCGカラーデータの先頭アドレス
+    LD DE,COLOR_TABLE_ADDR          ; DE <- カラーテーブルの先頭アドレス
+    LD BC,32                        ; BC <- 転送バイト数
+    CALL LDIRVM                     ; BIOS VRAMブロック転送
 
 SET_COLOR_TABLE_EXIT:
     RET
@@ -730,8 +985,9 @@ SET_SPRITE_PATTERN:
 	LD HL,SPR_PTN_DATA			    ; HLレジスタにスプライトデータの先頭アドレスを設定
     LD DE,SPR_PTN_ADDR			    ; DEレジスタにスプライトパターンジェネレータの先頭アドレスを設定
 	LD BC,8*4*4					    ; BCレジスタにスプライトデータのサイズを指定
-    CALL LDIRVM					    ; BIOS VRAMブロック転送
+    CALL LDIRVM				 	    ; BIOS VRAMブロック転送
 
+SET_SPRITE_PATTERN_EXIT:
     RET
 
 
@@ -923,6 +1179,7 @@ SET_SPR_ATTR_AREA:
     LD BC,4*MAX_CHR_CNT             ; 転送バイト数(4byte*キャラクター数)
     CALL LDIRVM                     ; BIOS VRAMブロック転送
 
+SET_SPR_ATTR_AREA_EXIT:
     RET 
 
 
@@ -944,7 +1201,6 @@ PRTSTR:
 
 PRTSTR_L1:
 	LD A,(DE)				        ; AレジスタにDEレジスタの示すアドレスのデータを取得
-
 	OR 0					        ; 0かどうか
     JR Z,PRTSTR_END			        ; 0の場合はPRTENDへ
 
@@ -958,26 +1214,6 @@ PRTSTR_L1:
 
 PRTSTR_END:
 	RET
-
-
-; ====================================================================================================
-; プレイヤー操作情報取得サブルーチン
-; ====================================================================================================
-GET_STICK:
-    CALL KILBUF                     ; BIOS キーバッファクリア
-
-    ; ■カーソルキー／ジョイスティックの入力をワークエリアに設定
-    ;   前回までの入力値との比較をできるようにワークエリアは2byte取ってあるが
-    ;   今は使っていない
-    XOR A
-    CALL GTSTCK                     ; BIOS スティック値取得
-;    OR A
-;    JR Z,GET_STICK_END              ; ゼロだったら終了
-    
-    LD (INPUT_BUFF_STICK),A         ; 入力バッファ(STICK)に入力値を設定    
-
-GET_STICK_END:
-    RET
 
 
 ; ====================================================================================================
@@ -1006,6 +1242,7 @@ INIT_RND:
     LD A,(INTCNT)
     LD (RND_WK),A                   ; 乱数のシード値を設定
 
+INIT_RND_EXIT:
     RET
 
 
@@ -1081,38 +1318,47 @@ GET_SPR_WK_ADDR_EXIT:
 SECTION rodata_user
 
 ; ■BIOSアドレス定義
-RDVRM:		        EQU $004A	    ; BIOS RDVRM
-WRTVRM:		        EQU $004D	    ; BIOS WRTVRM
-LDIRVM:			    EQU	$005C	    ; BIOS VRAMブロック転送
-CHGMOD:             EQU $005F       ; BIOS スクリーンモード変更
-ERAFNC:             EQU $00CC       ; BIOS ファンクションキー非表示
-KILBUF:             EQU $0156       ; BIOS キーバッファクリア
-GTSTCK:             EQU $00D5       ; BIOS カーソルキー・ジョイスティックのの状態取得
+RDVRM:		            EQU $004A	; BIOS RDVRM
+WRTVRM:		            EQU $004D	; BIOS WRTVRM
+FILVRM:			        EQU	$0056	; BIOS VRAM指定領域同一データ転送
+LDIRVM:			        EQU	$005C	; BIOS VRAMブロック転送
+CHGMOD:                 EQU $005F   ; BIOS スクリーンモード変更
+ERAFNC:                 EQU $00CC   ; BIOS ファンクションキー非表示
+KILBUF:                 EQU $0156   ; BIOS キーバッファクリア
+GTSTCK:                 EQU $00D5   ; BIOS ジョイスティックの状態取得
+GTTRIG:                 EQU $00D8   ; BIOS トリガボタンの状態取得
 
 ; ■システムワークエリアアドレス定義
-REG0SAV:            EQU $F3DF       ; VDPコントロールレジスタ0
-REG1SAV:            EQU $F3E0       ; VDPコントロールレジスタ1
-FORCLR:             EQU $F3E9       ; 前景色
-BAKCLR:             EQU $F3EA       ; 背景色
-BDRCLR:             EQU $F3EB       ; 周辺色
-LINL32:             EQU $F3AF       ; WIDTH値
-CLIKSW:             EQU $F3DB       ; キークリックスイッチ(0:OFF,0以外:ON)
-INTCNT:             EQU $FCA2       ; システムで1/60秒でインクリメントするワークエリア
+REG0SAV:                EQU $F3DF   ; VDPコントロールレジスタ0
+REG1SAV:                EQU $F3E0   ; VDPコントロールレジスタ1
+FORCLR:                 EQU $F3E9   ; 前景色
+BAKCLR:                 EQU $F3EA   ; 背景色
+BDRCLR:                 EQU $F3EB   ; 周辺色
+LINL32:                 EQU $F3AF   ; WIDTH値
+CLIKSW:                 EQU $F3DB   ; キークリックスイッチ(0:OFF,0以外:ON)
+INTCNT:                 EQU $FCA2   ; システムで1/60秒でインクリメントするワークエリア
 
 ; ■VRAMワークエリアアドレス定義
-PTN_GEN_ADDR:       EQU $0000       ; VRAM パターンジェネレータテーブルの先頭アドレス
-PTN_NAME_ADDR:      EQU $1800       ; VRAM パターンネームテーブルの先頭アドレス
-COLOR_TABLE_ADDR:   EQU $2000       ; VRAM カラーテーブルの先頭アドレス
-SPR_PTN_ADDR:	    EQU $3800	    ; VRAM スプライトパターンジェネレータの先頭アドレス
-SPR_ATR_ADDR:	    EQU	$1B00	    ; VRAM スプライトアトリビュートエリアの先頭アドレス
+PTN_GEN_ADDR:           EQU $0000   ; VRAM パターンジェネレータテーブルの先頭アドレス
+PTN_NAME_ADDR:          EQU $1800   ; VRAM パターンネームテーブルの先頭アドレス
+COLOR_TABLE_ADDR:       EQU $2000   ; VRAM カラーテーブルの先頭アドレス
+SPR_PTN_ADDR:	        EQU $3800	; VRAM スプライトパターンジェネレータの先頭アドレス
+SPR_ATR_ADDR:	        EQU	$1B00	; VRAM スプライトアトリビュートエリアの先頭アドレス
 
 ; ■定数定義
-MAX_CHR_CNT:        EQU 32          ; 最大キャラクター数
-MAX_BALL_CNT:       EQU 5           ; 最大ボール数
+MAX_CHR_CNT:            EQU 32      ; 最大キャラクター数
+MAX_BALL_CNT:           EQU 5       ; 最大ボール数
 
-STATE_TITLE:        EQU 1           ; ゲーム状態：タイトル
-STATE_GAME:         EQU 2           ; ゲーム状態：ゲーム
-STATE_OVER:         EQU 3           ; ゲーム状態：ゲームオーバー
+;STATE_TITLE_INIT:       EQU 0       ; ゲーム状態：タイトル初期化
+STATE_TITLE:            EQU 0       ; ゲーム状態：タイトル
+STATE_GAME_INIT:        EQU 1       ; ゲーム状態：ゲーム初期化
+;STATE_ROUND_INIT:       EQU 2       ; ゲーム状態：ラウンド初期化
+STATE_ROUND_START:      EQU 2       ; ゲーム状態：ラウンド開始
+STATE_GAME_MAIN:        EQU 3       ; ゲーム状態：ゲームメイン
+STATE_PLAYER_MISS:      EQU 4       ; ゲーム状態：プレイヤーミス
+STATE_OVER_INIT:        EQU 5       ; ゲーム状態：ゲームオーバー初期化
+STATE_OVER:             EQU 6       ; ゲーム状態：ゲームオーバー
+STATE_ROUND_CLEAR:      EQU 7       ; ゲーム状態：ラウンドクリアー
 
 ; ■フォントパターンデータ
 ; &H0100〜
@@ -1219,12 +1465,25 @@ SPR_PTN_DATA:
     DB $E0,$F8,$FC,$FE,$FE,$FF,$FF,$FF
     DB $FF,$FF,$FF,$FE,$FE,$FC,$F8,$E0
 
-; ■面データ
-; 1ブロック2z2キャラクターのため、1ライン2バイトx11行
+; ■ラウンドデータテーブル
 ROUND_TBL:
-    DW ROUND_1,00
+    DW MAP_TITLE,MAP_ROUND1,00
 
-ROUND_1:
+MAP_TITLE:
+    ; 16byte x 11 = 176byte
+    DB 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1
+    DB 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
+    DB 1,0,0,1,1,1,1,1,1,1,1,1,1,0,0,1
+    DB 1,0,0,1,1,1,1,1,1,1,1,1,1,0,0,1
+    DB 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
+    DB 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
+    DB 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
+    DB 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
+    DB 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
+    DB 1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1
+    DB 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1
+
+MAP_ROUND1:
     ; 32文字×22行=704byte
     ; VRAMの$4000〜に書き込む
 ;    DB "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -1271,6 +1530,8 @@ ROUND_1:
 ; ■移動量データ
 ; Y座標、X座標の移動量をSTICKの値の順に定義
 ; 計算時の座標値は10倍とし、計算後の座標は1/10とする必要がある
+; STICKの値は、キーボードとパッドの入力の OR を取る
+; 9以降は両方同時に入力された時のためのダミーデータ(最大15となる)
 MOVE_DATA:
     DW $0000,$0000                  ; STICK=0(未入力)
     DW $FF00,$0000                  ; STICK=1(上)
@@ -1281,6 +1542,13 @@ MOVE_DATA:
     DW $00B0,$FF4F                  ; STICK=6(左下)
     DW $0000,$FF00                  ; STICK=7(左)
     DW $FF4F,$FF4F                  ; STICK=8(左上)
+    DW $0000,$0000                  ; STICK=9
+    DW $0000,$0000                  ; STICK=10
+    DW $0000,$0000                  ; STICK=11
+    DW $0000,$0000                  ; STICK=12
+    DW $0000,$0000                  ; STICK=13
+    DW $0000,$0000                  ; STICK=14
+    DW $0000,$0000                  ; STICK=15
 
 ; ■アニメーションパターンテーブル
 PTN_TBL:
@@ -1289,12 +1557,21 @@ PTN_TBL:
 ; ■表示文字列データ
 ; dw : 表示先のVRAMアドレスのオフセット値(下位/上位)    
 ; db : 表示文字列、最後に0を設定すること
-STRING1:
-    DW $C400
-	DB "aa HELLO MSX WORLD !! aa",0
-STRING2:
+TITLE1:
+    DW $E800
+	DB " HELLO          ",0
+TITLE2:
+    DW $0801
+	DB "    MSX WORLD ! ",0
+TITLE3:
+    DW $0502
+	DB "PUSH SPACE OR TRIGGER.",0
+TITLE4:
     DW $8202
 	DB "PROGRAMMED BY ABURI6800 2021",0
+STRING_ROUND_START:
+    DW $0901
+	DB "READY ROUND 1",0
 STRING3:
     DW $0D00
 	DB "      ",0
@@ -1311,6 +1588,9 @@ STRING5:
 ; プログラム起動時にcrtでゼロでramに設定される 
 ; ====================================================================================================
 SECTION bss_user
+; ■経過時間
+TICK:
+    DEFS 2
 
 ; ■入力バッファ(STICK)
 ; +0 : 現在の入力値
@@ -1329,7 +1609,7 @@ VRAM_ADDR_WK:
     DEFS 2
 
 ; ■ゲーム状態
-GAME_STATUS:
+GAME_STATE:
     DEFS 1
 
 ; ■ラウンド
