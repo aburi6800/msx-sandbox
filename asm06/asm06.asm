@@ -1177,12 +1177,11 @@ SET_SPR_ATR_WK_L1:
     LD (DE),A                       ; A→(DE)
 
     ; ■設定元のスプライトキャラクターワークテーブルのアドレスを次の先頭アドレスへ
-    INC HL                          ; HL=HL+5
-    INC HL
-    INC HL
-    INC HL
-    INC HL
-
+    PUSH BC                         ; 3
+    LD BC,11                        ; 3 HL=HL+11
+    ADD HL,BC                       ; 3
+    POP BC                          ; 3
+    
     ; ■設定先のスプライトアトリビュートワークテーブルのアドレスを次の先頭アドレスへ
     INC DE                          ; DE=DE+1
 
@@ -1342,6 +1341,7 @@ GET_RND_EXIT:
 
 ; ====================================================================================================
 ; スプライトキャラクターワークテーブルのアドレス値を求める
+; SPR_CHR_WK_TBL+(キャラクターNo*16)のアドレスを求めてIXレジスタに設定します。
 ; DE,HLレジスタの値を破壊します。
 ; IN  : B = キャラクターNo
 ; OUT : IX = アドレス
@@ -1356,21 +1356,19 @@ GET_SPR_WK_ADDR:
     JR Z,GET_SPR_WK_ADDR_EXIT       ; B=0ならそのまま終了する
 
     ; ■オフセット値算出
-    LD D,0                          ; DE=B
-    LD E,B
+    ; DEレジスタにB*16を求める
+    LD H,0                          ; DE=B
+    LD L,B   
 
-    LD H,0                          ; HL=B
-    LD L,B
-    
-    ADD HL,HL                       ; HL=HL*8
+    ADD HL,HL                       ; HL=HL*16
     ADD HL,HL
     ADD HL,HL
-    ADD HL,DE                       ; HL=HL+(DE*2)
-    ADD HL,DE
+    ADD HL,HL
 
-    ; ■スプライトキャラクターワークテーブルのアドレス算出
     LD D,H                          ; HL -> DE
     LD E,L
+
+    ; ■スプライトキャラクターワークテーブルのアドレス算出
     LD HL,SPR_CHR_WK_TBL            ; HL=スプライトキャラクターワークテーブルの先頭アドレス
     ADD HL,DE                       ; HL=HL+DE
 
@@ -1426,6 +1424,8 @@ STATE_GAME_MAIN:        EQU 3       ; ゲーム状態：ゲームメイン
 STATE_PLAYER_MISS:      EQU 4       ; ゲーム状態：プレイヤーミス
 STATE_OVER:             EQU 5       ; ゲーム状態：ゲームオーバー
 STATE_ROUND_CLEAR:      EQU 6       ; ゲーム状態：ラウンドクリアー
+
+SPR_CHR_WK_SIZE:        EQU 16      ; スプライトキャラクターワークエリアのサイズ
 
 ; ■フォントパターンデータ
 ; &H0100〜
@@ -1719,7 +1719,7 @@ RND_WK:
 PTN_ADDR:
 	DEFS 2
 
-; ■スプライトキャラクターワークテーブル(10Byte)
+; ■スプライトキャラクターワークテーブル(16Byte)
 ; +0:Y座標(小数部)
 ; +1:Y座標(整数部)
 ; +2:X座標(小数部)
@@ -1730,8 +1730,14 @@ PTN_ADDR:
 ; +7:移動方向(STICKの値に対応)  
 ; +8:汎用
 ; +9:汎用
+; +10:汎用
+; +11:汎用
+; +12:汎用
+; +13:汎用
+; +14:汎用
+; +15:汎用
 SPR_CHR_WK_TBL:
-    DEFS 10*MAX_CHR_CNT
+    DEFS SPR_CHR_WK_SIZE*MAX_CHR_CNT
 
 ; ■スプライトアトリビュートワークテーブル(4byte*n)
 ; +0:スプライトアトリビュート1バイト目(Y座標)
