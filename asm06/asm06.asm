@@ -14,14 +14,20 @@ _main:
     LD A,STATE_TITLE
     CALL CHANGE_STATE
 
+    ; ■テスト：固定で表示
+    LD HL,STRING_HEADER1
+    CALL PRTSTR
+    LD HL,STRING_HEADER2
+    CALL PRTSTR
+
 
 ; ====================================================================================================
 ; メインループ
 ; ====================================================================================================
 MAINLOOP:
     ; ■経過時間をカウントアップ
-    CALL TICK_COUNT
-    PUSH AF
+    CALL TICK_COUNT                 ; 初回はゼロフラグが立つ
+    PUSH AF                         ; フラグを退避
 
     ; ■ゲーム状態の値からジャンプテーブルアドレスのオフセット値を求める
     LD A,(GAME_STATE)               ; A <- ゲーム状態
@@ -33,9 +39,9 @@ MAINLOOP:
     LD C,A
 
     ; ■ジャンプテーブルの該当ステップにジャンプ
-    POP AF
+    POP AF                          ; フラグを復元
     LD HL,MAINLOOP_L1               ; HL <- ジャンプテーブルのアドレス
-    ADD HL,BC                       ; HL=HL+BC
+    ADD HL,BC                       ; HL=HL+BC（ゼロフラグは変化しない）
     JP (HL)
 
 MAINLOOP_L1:
@@ -44,7 +50,6 @@ MAINLOOP_L1:
     JP ROUND_START                  ; ゲーム状態：ラウンド開始
     JP GAME_MAIN                    ; ゲーム状態：ゲームメイン
     JP PLAYER_MISS                  ; ゲーム状態：プレイヤーミス
-    JP OVER_INIT                    ; ゲーム状態：ゲームオーバー初期化
     JP OVER                         ; ゲーム状態：ゲームオーバー
     JP ROUND_CLEAR                  ; ゲーム状態：ラウンドクリアー
 
@@ -125,8 +130,8 @@ CHANGE_STATE_EXIT:
 ; ====================================================================================================
 TICK_RESET:
     LD A,0                          ; A <- 0
-    LD (TICK+0),A
-    LD (TICK+1),A
+    LD (TICK1+0),A
+    LD (TICK1+1),A
 
 TICK_RESET_EXIT:
     RET
@@ -136,7 +141,16 @@ TICK_RESET_EXIT:
 ; 経過時間カウント
 ; ====================================================================================================
 TICK_COUNT:
-    LD HL,(TICK)                    ; HL <- TICKの値
+    ; DEBUG
+    LD HL,28
+    LD A,(TICK1+1)
+    CALL PRTHEX
+
+    LD HL,30
+    LD A,(TICK1)
+    CALL PRTHEX
+
+    LD HL,(TICK1)                    ; HL <- TICKの値
 
     LD A,H                          ; HL=0の場合、ゼロフラグが立つ
     OR L
@@ -152,7 +166,7 @@ TICK_COUNT:
     LD H,0
 
 TICK_COUNT_L1:
-    LD (TICK),HL
+    LD (TICK1),HL
 
 TICK_COUNT_EXIT:
     RET
@@ -233,7 +247,7 @@ ROUND_START:
 
     ; ■TICKが300カウント(=5秒)経過してなければ抜ける
     LD BC,300
-    LD HL,(TICK)    
+    LD HL,(TICK1)    
     SBC Hl,BC
     JR NZ,ROUND_START_EXIT
 
@@ -527,6 +541,12 @@ PLAYER_HITCHECK_EXIT:
 ; ----------------------------------------------------------------------------------------------------
 ; スプライトパターン番号更新サブルーチン
 ; IN  : B = スプライトキャラクター番号
+; @ToDo:アニメーションパターンはスプライトキャラクターワークテーブルに持たせたい
+;       - パターンテーブルNo(1byte)と現在のパターンカウント(1byte)をもたせる？
+;       - するとスプライトキャラクターワークテーブルは10byteでは足りない、16byteにする？
+;       - データ長は変更に対応できるように定数にしよう
+;       - パターンテーブルNoとアドレスを対応させたテーブルを定義する必要あり
+;       - ラベル名も直したい（PLAYERだけじゃないので）
 ; ----------------------------------------------------------------------------------------------------
 PLAYER_ANIM:
     ; ここはキャラクターデータにパターンテーブルの番号を持たせて、
@@ -1217,6 +1237,54 @@ PRTSTR_END:
 
 
 ; ====================================================================================================
+; 16進数表示サブルーチン
+; IN  : A = 表示対象データ
+;       HL = 表示位置のVRAMアドレスオフセット値
+; ====================================================================================================
+PRTHEX:
+    ; ■VRAMアドレス算出
+    LD DE,HL                        ; DE <- HL
+    LD HL,PTN_NAME_ADDR             ; HL <- パターンネームテーブルの先頭アドレス
+    ADD HL,DE                       ; HL=HL+DE
+
+    ; ■表示対象データの上位4ビットに対する表示文字コード算出
+    PUSH AF                         ; AFレジスタを一旦スタックに退避
+    SRL A                           ; 右シフトx4
+    SRL A
+    SRL A
+    SRL A
+    CALL PRTHEX_GETCHR              ; Aレジスタの値からキャラクタコードを求める
+
+    ; ■VRAM書き込み
+    CALL WRTVRM
+
+    ; ■VRAMアドレスをインクリメント
+    INC HL
+
+    ; ■表示対象データの下位4ビットに対する表示文字コード算出
+    POP AF                          ; AFレジスタをスタックから復帰
+    AND @00001111                   ; 下位4ビットを取り出し
+    CALL PRTHEX_GETCHR              ; Aレジスタの値からキャラクタコードを求める
+
+    ; ■VRAM書き込み
+    CALL WRTVRM
+
+PRTHEX_EXIT:
+    RET
+
+PRTHEX_GETCHR:
+    OR A                            ; キャリーフラグリセット
+    CP 10                           ; A < 10の場合はキャリーフラグが立つ
+    JR C,PRTHEX_GETCHR_L1
+    ADD A,$37                       ; A〜F
+    RET
+
+PRTHEX_GETCHR_L1:
+    ADD A,$30                       ; 0〜9
+    RET
+
+
+; ====================================================================================================
 ; 絶対値減算サブルーチン
 ; IN  : A = 値１
 ;       B = 値２
@@ -1349,16 +1417,13 @@ SPR_ATR_ADDR:	        EQU	$1B00	; VRAM スプライトアトリビュートエ�
 MAX_CHR_CNT:            EQU 32      ; 最大キャラクター数
 MAX_BALL_CNT:           EQU 5       ; 最大ボール数
 
-;STATE_TITLE_INIT:       EQU 0       ; ゲーム状態：タイトル初期化
 STATE_TITLE:            EQU 0       ; ゲーム状態：タイトル
 STATE_GAME_INIT:        EQU 1       ; ゲーム状態：ゲーム初期化
-;STATE_ROUND_INIT:       EQU 2       ; ゲーム状態：ラウンド初期化
 STATE_ROUND_START:      EQU 2       ; ゲーム状態：ラウンド開始
 STATE_GAME_MAIN:        EQU 3       ; ゲーム状態：ゲームメイン
 STATE_PLAYER_MISS:      EQU 4       ; ゲーム状態：プレイヤーミス
-STATE_OVER_INIT:        EQU 5       ; ゲーム状態：ゲームオーバー初期化
-STATE_OVER:             EQU 6       ; ゲーム状態：ゲームオーバー
-STATE_ROUND_CLEAR:      EQU 7       ; ゲーム状態：ラウンドクリアー
+STATE_OVER:             EQU 5       ; ゲーム状態：ゲームオーバー
+STATE_ROUND_CLEAR:      EQU 6       ; ゲーム状態：ラウンドクリアー
 
 ; ■フォントパターンデータ
 ; &H0100〜
@@ -1431,7 +1496,9 @@ FONT_PTN_DATA:
 ; ■PCGパターンデータ
 ; &H0308〜
 PCG_PTN_DATA:
-    DB "a",$EF,$EF,$EF,$00,$FE,$FE,$FE,$00  ; a
+;    DB "a",$EF,$EF,$EF,$00,$FE,$FE,$FE,$00  ; a
+    DB "a",$FE,$FF,$FF,$BF,$FF,$FF,$EF,$FF  ; a
+    DB "h",$FF,$EE,$2A,$A8,$02,$20,$00,$00  ; h
     DB 0
 
 ; ■PCGカラーデータ
@@ -1572,6 +1639,12 @@ TITLE4:
 STRING_ROUND_START:
     DW $0901
 	DB "READY ROUND 1",0
+STRING_HEADER1:
+    DW $0000
+    DB "SCORE       HI-SCORE    RD  LEFT"
+STRING_HEADER2:
+    DW $2000
+    DB "       0       76500     0     0"
 STRING3:
     DW $0D00
 	DB "      ",0
@@ -1588,9 +1661,13 @@ STRING5:
 ; プログラム起動時にcrtでゼロでramに設定される 
 ; ====================================================================================================
 SECTION bss_user
-; ■経過時間
-TICK:
-    DEFS 2
+; ■経過時間カウンタ
+TICK1:
+    DEFS 2                      ; 1/60のタイマー
+TICK2:
+    DEFS 2                      ; 1/10のタイマー、TICK=6ごとにインクリメント
+TICK3:
+    DEFS 2                      ; 1秒のタイマー、TICK1=60ごとにインクリメント
 
 ; ■入力バッファ(STICK)
 ; +0 : 現在の入力値
