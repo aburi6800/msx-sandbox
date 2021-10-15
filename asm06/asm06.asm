@@ -317,10 +317,10 @@ COPY_MAP_DATA_EXIT:
 ; 予め、メモリの(ROUND)にラウンド数を入れておくこと
 ; ====================================================================================================
 DRAW_MAP:
-    ; ■VRAMアドレスワーク設定
-    LD H,$1A                        ; 書き込み開始VRAMアドレス = $1ADE
-    LD L,$DE
-    LD (VRAM_ADDR_WK),HL
+;    ; ■VRAMアドレスワーク設定
+;    LD H,$1A                        ; 書き込み開始VRAMアドレス = $1ADE
+;    LD L,$DE
+;    LD (VRAM_ADDR_WK),HL
 
     ; ■ラウンドデータの取得先アドレス算出
     ; - 遡って取得するので、末端のアドレスを算出する
@@ -359,24 +359,24 @@ DRAW_MAP_L2:
     JP DRAW_MAPCHIP_1               ; データ=1の描画
 
 DRAW_MAP_L4:
-    LD HL,(VRAM_ADDR_WK)            ; HL <- VRAMアドレスワーク
-    DEC HL                          ; HL=HL-2
-    DEC HL
+;    LD HL,(VRAM_ADDR_WK)            ; HL <- VRAMアドレスワーク
+;    DEC HL                          ; HL=HL-2
+;    DEC HL
 
-    LD A,B                          ; Bレジスタを左に4ビットシフト
-    DEC A
-    SLA A
-    SLA A
-    SLA A
-    SLA A
-    JR NZ,DRAW_MAP_L5               ; ゼロではない(=16の倍数でない)場合はDRAW_MAP_L5へ
+;    LD A,B                          ; Bレジスタを左に4ビットシフト
+;    DEC A
+;    SLA A
+;    SLA A
+;    SLA A
+;    SLA A
+;    JR NZ,DRAW_MAP_L5               ; ゼロではない(=16の倍数でない)場合はDRAW_MAP_L5へ
 
-    OR A                            ; キャリーフラグをOFF
-    LD DE,32                        ; HL=HL-32
-    SBC HL,DE
+;    OR A                            ; キャリーフラグをOFF
+;    LD DE,32                        ; HL=HL-32
+;    SBC HL,DE
 
-DRAW_MAP_L5:
-    LD (VRAM_ADDR_WK),HL            ; HL -> VRAMアドレスワーク
+;DRAW_MAP_L5:
+;    LD (VRAM_ADDR_WK),HL            ; HL -> VRAMアドレスワーク
 
     POP HL                          ; HL <- スタック(ラウンドデータの取得先アドレス)
     DEC HL
@@ -387,7 +387,8 @@ DRAW_MAP_EXIT:
 
 DRAW_MAPCHIP_0:
     ; 空白を描画(左上)
-    LD HL,(VRAM_ADDR_WK)            ; HL <- VRAMアドレスワーク
+;    LD HL,(VRAM_ADDR_WK)            ; HL <- VRAMアドレスワーク
+    CALL GET_CHIP_VRAMADDR
     LD A,' '
     CALL WRTVRM
 
@@ -411,7 +412,8 @@ DRAW_MAPCHIP_0:
 
 DRAW_MAPCHIP_1:
     ; 床を描画(左上)
-    LD HL,(VRAM_ADDR_WK)            ; HL <- VRAMアドレスワーク
+;    LD HL,(VRAM_ADDR_WK)            ; HL <- VRAMアドレスワーク
+    CALL GET_CHIP_VRAMADDR
     LD A,'a'
     CALL WRTVRM
 
@@ -450,6 +452,54 @@ DRAW_MAPCHIP_1:
     LD A,'h'
     CALL WRTVRM
 
+    RET
+
+
+; ====================================================================================================
+; マップチップ描画の左上のVRAMアドレスを求めるサブルーチン
+; IN  B = マップチップの番号、1～176
+; OUT HL = 描画先のVRAMアドレス(左上)
+; DEレジスタを破壊します
+; ====================================================================================================
+GET_CHIP_VRAMADDR:
+    DEC B                           ; BはDJNZする都合上1～なので、-1する
+
+    ; ■Y座標の算出を行う。
+    ;  (マップチップ番号-1)を16で割り、64倍することで求める。
+    ;  16で割るのは、4ビット右シフトすることで求める。
+    ;  64倍は、16で割った結果(0～11)を上位2ビットと下位2ビットに分け、
+    ;  上位2ビットは上位レジスタの0～1ビットへ、下位2ビットは下位レジスタの7～6ビットに設定する。
+    ;  これを実現するため、以下の処理を行う。
+    ;  下位レジスタ＝元の5～4ビットの値を7～6ビットに設定
+    ;  上位レジスタ＝元の7～6ビットの値を1～0ビットに設定
+    LD A,B
+    AND @00110000                   ; 5～4ビット目を取得
+    ADD A,A                         ; 2ビット左シフト = 4倍なので2回ADDする。最初の値の5～4ビット目が7～6ビット目になる
+    ADD A,A
+    LD L,A                          ; 下位8ビットを設定
+
+    LD A,B
+    AND @11000000                   ; 7～6ビット目を取得
+    RLCA                            ; 2回左ローテート = 1～0ビット目に値が設定される
+    RLCA
+    LD H,A                          ; 上位8ビットを設定
+
+    ; ■X座標の算出を行う。
+    ;  (マップチップ番号-1)の下位4ビットを取得し、2倍することで求める。
+    LD A,B
+    AND @00001111
+    ADD A,A                         ; マップチップは2x2キャラクタなのでA=A*2する
+
+    LD D,0
+    LD E,A
+    ADD HL,DE                       ; HLに横座標のアドレスを加算
+
+    ; ■HLに左上(=$1840)のVRAMアドレスを加算
+    LD D,$18
+    LD E,$40    
+    ADD HL,DE
+
+    INC B                           ; -1したBの値を+1して元に戻す
     RET
 
 
