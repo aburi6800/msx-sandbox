@@ -269,11 +269,17 @@ ROUND_START:
 
     ; ■敵初期化
     ; @ToDo:マップデータの後に、敵の初期情報を置いて、そこから設定するようにしたい
-    LD B,10                         ; 敵の数
+    LD B,5                          ; 敵の数
 ROUND_START_L1:
-    LD A,2
+    LD A,2                          ; 2＝テキ1
     CALL ADD_CHARACTER
     DJNZ ROUND_START_L1             ; 敵の数だけ繰り返す
+
+    LD B,5                          ; 敵の数
+ROUND_START_L2:
+    LD A,3                          ; 3＝テキ2
+    CALL ADD_CHARACTER
+    DJNZ ROUND_START_L2             ; 敵の数だけ繰り返す
 
     ; ■ゲーム状態変更
     LD A,STATE_GAME_MAIN            ; ゲーム状態 <- ゲームメイン
@@ -357,6 +363,8 @@ DRAW_MAP_L1:
 DRAW_MAP_L2:
     JP DRAW_MAPCHIP_0               ; データ=0の描画
     JP DRAW_MAPCHIP_1               ; データ=1の描画
+    JP DRAW_MAPCHIP_2               ; データ=2の描画
+    JP DRAW_MAPCHIP_3               ; データ=3の描画
 
 DRAW_MAP_L4:
 ;    LD HL,(VRAM_ADDR_WK)            ; HL <- VRAMアドレスワーク
@@ -411,28 +419,80 @@ DRAW_MAPCHIP_0:
     RET
 
 DRAW_MAPCHIP_1:
-    ; 床を描画(左上)
-;    LD HL,(VRAM_ADDR_WK)            ; HL <- VRAMアドレスワーク
+    ; ■床を描画
+    ; 左上
     CALL GET_CHIP_VRAMADDR
     LD A,'a'
     CALL WRTVRM
 
-    ; 床を描画(右上)
+    ; 右上
     INC HL                          ; HL=HL+1
     LD A,'a'
     CALL WRTVRM
 
-    ; 床を描画(左下)
+    ; 左下
     LD DE,31                        ; HL=HL+31
     ADD HL,DE                   
     LD A,'a'
     CALL WRTVRM
 
-    ; 床を描画(右下)
+    ; 右下
     INC HL                          ; HL=HL+1
     LD A,'a'
     CALL WRTVRM
 
+    JP DRAW_MAPCHIP_UNDER
+
+DRAW_MAPCHIP_2:
+    ; ■パネルを描画
+    ; 左上
+    CALL GET_CHIP_VRAMADDR
+    LD A,$70
+    CALL WRTVRM
+
+    ; 右上
+    INC HL                          ; HL=HL+1
+    LD A,$72
+    CALL WRTVRM
+
+    ; 左下
+    LD DE,31                        ; HL=HL+31
+    ADD HL,DE                   
+    LD A,$71
+    CALL WRTVRM
+
+    ; 右下
+    INC HL                          ; HL=HL+1
+    LD A,$73
+    CALL WRTVRM
+
+    JP DRAW_MAPCHIP_UNDER
+
+DRAW_MAPCHIP_3:
+    ; ドアを描画
+    CALL GET_CHIP_VRAMADDR
+    LD A,$78
+    CALL WRTVRM
+
+    ; 床を描画(右上)
+    INC HL                          ; HL=HL+1
+    LD A,$7A
+    CALL WRTVRM
+
+    ; 床を描画(左下)
+    LD DE,31                        ; HL=HL+31
+    ADD HL,DE                   
+    LD A,$79
+    CALL WRTVRM
+
+    ; 床を描画(右下)
+    INC HL                          ; HL=HL+1
+    LD A,$7B
+    CALL WRTVRM
+
+    JP DRAW_MAPCHIP_UNDER
+
+DRAW_MAPCHIP_UNDER:
     ; 画面最下段か
     LD A,B                          ; A <- B
     CP 160                          ; A > 160か
@@ -677,7 +737,7 @@ GET_MAPDATA_EXIT:
 
 
 ; ====================================================================================================
-; 敵１処理サブルーチン
+; テキ1処理サブルーチン
 ; ====================================================================================================
 UPDATE_ENEMY1:
     ; ■移動
@@ -807,10 +867,36 @@ ENEMY_BOUND_EXIT:
 
 
 ; ====================================================================================================
-; 敵２処理サブルーチン
+; テキ2処理サブルーチン
 ; ====================================================================================================
 UPDATE_ENEMY2:
-    JP UPDATE_ENEMY1
+    ; ■移動
+    CALL SPRITE_MOVE                ; スプライトキャラクター移動処理
+    CALL SPRITE_ANIM                ; スプライトパターン番号更新
+
+    ; ■カウンタ減算
+    LD A,(IX+10)                    ; A <- カウンタ
+    DEC A                           ; A=A-1
+    OR A                            ; ゼロかどうか判定(ゼロならZフラグがONになる)
+    JR NZ,UPDATE_ENEMY2_L2          ; ゼロでなければL2へ
+
+    ; ■カウンタリセット
+    LD (IX+10),20
+
+    ; ■移動方向を変更する
+    LD A,(IX+7)                     ; A <- 方向
+    DEC A                           ; A=A-1
+    OR A                            ; ゼロかどうか判定(ゼロならZフラグがONになる)
+    JR NZ,UPDATE_ENEMY2_L1
+    LD A,8                          ; 移動方向を8に設定
+
+UPDATE_ENEMY2_L1:
+    LD (IX+7),A                     ; A -> 方向
+    RET
+
+UPDATE_ENEMY2_L2:
+    LD (IX+10),A
+    RET
 
 
 ; ====================================================================================================
@@ -1031,7 +1117,7 @@ SET_COLOR_TABLE_EXIT:
 SET_SPRITE_PATTERN:
 	LD HL,SPR_PTN_DATA			    ; HLレジスタにスプライトデータの先頭アドレスを設定
     LD DE,SPR_PTN_ADDR			    ; DEレジスタにスプライトパターンジェネレータの先頭アドレスを設定
-	LD BC,8*7*4					    ; BCレジスタにスプライトデータのサイズを指定
+	LD BC,32*9					    ; BCレジスタにスプライトデータのサイズを指定
     CALL LDIRVM				 	    ; BIOS VRAMブロック転送
 
 SET_SPRITE_PATTERN_EXIT:
@@ -1095,10 +1181,10 @@ INIT_PLAYER_EXIT:
 
 
 ; ====================================================================================================
-; 敵１初期化
+; テキ1初期化
 ; ====================================================================================================
 INIT_ENEMY1:
-    LD (IX),2                       ; キャラクター番号=敵１
+    LD (IX),2                       ; キャラクター番号=テキ1
 
 INIT_ENEMY1_L2:
     ; ■Y座標設定
@@ -1123,7 +1209,7 @@ INIT_ENEMY1_L3:
     LD (IX+4),H                     ; X座標(上位)
 
     ; ■パターンNo設定
-    LD (IX+5),3                     ; パターンNo=3(ボール)
+    LD (IX+5),3                     ; パターンNo=3(テキ1)
     
 INIT_ENEMY1_L4:
     ; ■カラーコード設定
@@ -1145,14 +1231,16 @@ INIT_ENEMY1_L4:
     ; 移動方向が1～4は右向き(ANIM_PTN_ENEMY1)
     ;          5～8は左向き(ANIM_PTN_ENEMY2)を設定する
     CP 5
-    JR NC,INIT_ENEMY1_L5            ; 5～8はキャリーフラグが立たないのでENEMY_BOUND_L4へ
+    JR NC,INIT_ENEMY1_L5            ; 5～8はキャリーフラグが立たないのでENEMY_BOUND_L5へ
 
-    LD (IX+8),1                     ; アニメーションテーブル番号=1(ANIM_PTN_ENEMY1)
+    ; 右向きの設定
+    LD (IX+8),1                     ; アニメーションテーブル番号=1(ANIM_PTN_ENEMY1_R)
     LD (IX+9),0                     ; アニメーションカウンタ=0
     JR INIT_ENEMY1_EXIT
 
 INIT_ENEMY1_L5:
-    LD (IX+8),2                     ; アニメーションテーブル番号=2(ANIM_PTN_ENEMY2)
+    ; 左向きの設定
+    LD (IX+8),2                     ; アニメーションテーブル番号=2(ANIM_PTN_ENEMY1_L)
     LD (IX+9),0                     ; アニメーションカウンタ=0
 
 INIT_ENEMY1_EXIT:
@@ -1160,11 +1248,20 @@ INIT_ENEMY1_EXIT:
 
 
 ; ====================================================================================================
-; 敵２初期化
+; テキ2初期化
 ; ====================================================================================================
 INIT_ENEMY2:
-    JP INIT_ENEMY1
+    CALL INIT_ENEMY1                ; まずはテキ１と同じ初期化を行う
 
+    LD (IX),3                       ; キャラクター番号=テキ2
+    LD (IX+5),7
+    LD (IX+8),3                     ; アニメーションテーブル番号=3(ANIM_PTN_ENEMY2)
+    LD (IX+9),0                     ; アニメーションカウンタ=0
+
+    ; テキ2の独自のプロパティ
+    LD (IX+10),20                   ; カウンタ(20フレーム)
+
+    RET
 
 ; ====================================================================================================
 ; スプライトキャラクターワークテーブルのアドレス値を求める
@@ -1820,26 +1917,36 @@ SPR_PTN_DATA:
 	DB $0F,$3F,$FF,$C3,$1D,$1D,$1C,$00
 	DB $F0,$F8,$B8,$B8,$B8,$FF,$E7,$17
 	DB $F8,$FE,$FC,$F8,$F0,$F0,$7C,$7C
-	; 12〜15：モンスターA(右１)
+	; 12〜15：テキ1(右１)
     DB $01,$07,$0E,$0D,$0D,$1E,$1F,$1F
     DB $3D,$BE,$FE,$7F,$3F,$0F,$01,$00
     DB $F0,$3C,$DE,$EE,$AF,$DF,$3F,$FF
     DB $FF,$FF,$2B,$01,$A8,$FE,$FC,$00
-    ; 16～20：モンスターA(右2)
+    ; 16～19：テキ1(右2)
     DB $00,$01,$07,$0E,$0D,$0D,$1E,$1F
     DB $1F,$BF,$FF,$FE,$7F,$3F,$0F,$01
     DB $00,$F0,$3C,$DE,$AE,$EF,$DF,$3F
     DB $FF,$FF,$FF,$AA,$55,$FF,$FE,$FC
-    ; 21～24：モンスターA(左1)
+    ; 20～23：テキ1(左1)
     DB $0F,$3C,$7B,$77,$F5,$FB,$FC,$FF
     DB $FF,$FF,$D4,$80,$15,$7F,$3F,$00
     DB $80,$E0,$70,$B0,$B0,$78,$F8,$F8
     DB $BC,$7D,$7F,$FE,$FC,$F0,$80,$00
-    ; 25～28：モンスターA(左2)
+    ; 24～27：テキ1(左2)
     DB $00,$0F,$3C,$7B,$75,$F7,$FB,$FC
     DB $FF,$FF,$FF,$55,$AA,$FF,$7F,$3F
     DB $00,$80,$E0,$70,$B0,$B0,$78,$F8
     DB $F8,$FD,$FF,$7F,$FE,$FC,$F0,$80
+    ; 28～31：テキ2パターン1
+    DB $44,$22,$37,$37,$3F,$7F,$6F,$E3
+    DB $F1,$FB,$FF,$6F,$72,$3C,$1F,$07
+    DB $40,$30,$78,$FC,$FC,$FE,$F6,$C7
+    DB $8F,$DF,$FF,$F6,$4E,$3C,$F8,$E0
+    ; 32～35：テキ2パターン2
+    DB $00,$09,$13,$1B,$3F,$3F,$7F,$6F
+    DB $E3,$F1,$FB,$7F,$77,$38,$1F,$07
+    DB $88,$10,$30,$78,$FC,$FC,$FE,$F6
+    DB $C7,$8F,$DF,$FE,$EE,$1C,$F8,$E0
 
 ; ■移動量データ
 ; Y座標、X座標の移動量をSTICKの値の順に定義
@@ -1876,8 +1983,8 @@ CHARACTER_INIT_TABLE:
 
 ; ■キャラクターロジックテーブル
 ; 1 : プレイヤー
-; 2 : 敵１
-; 3 : 敵２
+; 2 : テキ１
+; 3 : テキ２
 CHARACTER_UPDATE_TABLE:
     DW UPDATE_NONE
     DW UPDATE_PLAYER
@@ -1887,17 +1994,20 @@ CHARACTER_UPDATE_TABLE:
 ; ■アニメーションパターンアドレステーブル
 ANIM_PTN_TBL:
     DW ANIM_PTN_PLAYER
-    DW ANIM_PTN_ENEMY1
+    DW ANIM_PTN_ENEMY1_R
+    DW ANIM_PTN_ENEMY1_L
     DW ANIM_PTN_ENEMY2
 
 PTN_TBL:
 	DB 1,1,1,2,2,2,3,3,3,2,2,2,0
 ANIM_PTN_PLAYER:
 	DB 1,1,1,2,2,2,3,3,3,2,2,2,0
-ANIM_PTN_ENEMY1:
+ANIM_PTN_ENEMY1_R:
 	DB 4,4,4,4,5,5,5,5,0
-ANIM_PTN_ENEMY2:
+ANIM_PTN_ENEMY1_L:
 	DB 6,6,6,6,7,7,7,7,0
+ANIM_PTN_ENEMY2:
+	DB 8,8,8,8,8,8,8,8,9,9,9,9,9,9,9,9,0
 
 ; ■ラウンドデータテーブル
 ROUND_TBL:
@@ -1944,17 +2054,17 @@ MAP_ROUND1:
 ;    DB "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
     ; 16byte x 11 = 176byte
-    DB 0,0,0,1,1,1,1,1,1,1,1,1,1,0,0,0
+    DB 0,0,0,1,1,2,2,2,2,2,2,1,1,0,0,0
     DB 0,0,1,1,0,0,0,0,0,0,0,0,1,1,0,0
     DB 1,1,1,0,0,0,0,0,0,0,0,0,0,1,1,1
     DB 1,1,1,1,1,0,0,0,0,0,0,1,1,1,1,1
-    DB 1,1,1,1,1,1,0,0,0,0,1,1,1,1,1,1
-    DB 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1
-    DB 1,1,1,1,1,1,0,0,0,0,1,1,1,1,1,1
+    DB 1,1,1,1,1,2,0,0,0,0,2,1,1,1,1,1
+    DB 1,1,1,1,1,2,2,2,2,2,2,1,1,1,3,1
+    DB 1,1,1,1,1,2,0,0,0,0,2,1,1,1,1,1
     DB 1,1,1,1,1,0,0,0,0,0,0,1,1,1,1,1
     DB 1,1,1,0,0,0,0,0,0,0,0,0,0,1,1,1
     DB 0,0,1,1,0,0,0,0,0,0,0,0,1,1,0,0
-    DB 0,0,0,1,1,1,1,1,1,1,1,1,1,0,0,0
+    DB 0,0,0,1,1,2,2,2,2,2,2,1,1,0,0,0
 
     ; 2byte x 11 = 22byte
 ;    DW $FFFF,$0000,$E007,$F81F,$FC3F
