@@ -19,7 +19,7 @@
 #       (speed / 2) (端数切捨) ※ここは結構影響が大きいので、後で要調整
 # - ボリューム('x')
 #   - 12を15、1を1とする。以下で計算。
-#       value*0.25 (端数切捨)
+#       value*1.25 (端数切捨)
 #   - 直前のデータと値が変わらない場合はデータを出力しない。
 # - PSGR#7 (ノイズ/トーンのミキシング)
 #   - 以下の音色はノイズとし、以外をトーンとする
@@ -38,22 +38,29 @@ class lcconv:
     '''
     lcconvクラス
     '''
-    def __init__(self, jsonFileName:str):
-        # 出力データクラスを初期化
-        dc = self.dataClass(jsonFileName)
+    # 出力データクラス
+    dc = None
 
+    def __init__(self, jsonFileName:str):
+        '''
+        クラス初期化
+        '''
+        # 出力データクラスを初期化
+        self.dc = self.dataClass(jsonFileName)
+
+    def execute(self, outFileName:str):
+        '''
+        変換処理実行
+        '''
         # 変換処理実行
-        dc.convert()
+        self.dc.convert()
 
         # 出力データクラスからファイルに出力
-        dc.export()
-
-        # 終了
-        pass
+        self.dc.export(outFileName)
 
     class dataClass:
         '''
-        クラス変数
+        出力データクラス
         '''
         # jsonデータのリスト
         data_header = []
@@ -65,9 +72,9 @@ class lcconv:
         # ベースとなるspeed値
         speed = 0
 
-        '''
-        出力データクラス
-        '''
+        # 出力ファイル名
+        outfilePath = ""
+
         def __init__(self, jsonFileName:str = ""):
             '''
             初期化処理
@@ -109,14 +116,27 @@ class lcconv:
             '''
             # 'sl'要素を取り出す
             sl = data["sl"]
+
             # データバッファ
             buffer = []
+
             # 出力データ
             data = []
+
             # 空データカウント
             noneCount = 0
+
             # 終了判定フラグ
             isTerminate = False
+
+            # 各値の退避変数を初期化
+            svVoice = None
+            svTone = None
+            svVolume = None
+            svNoiseTone = None
+
+            # 音長
+            time = 0
 
             # sl要素の全てに対して繰り返す(0～15)
             for vl in sl:
@@ -124,50 +144,134 @@ class lcconv:
                 # データバッファ初期化
                 buffer = []
 
-                # vl要素の全てに対して繰り返す(0～32)
+                # vl要素の全てに対して繰り返す(0～31)
                 for v in vl["vl"]:
 
-                    # トーン値
-                    tone = v["n"]
-                    # ボリューム値
-                    volume = v["x"]
-                    # 音色
-                    voice = v["id"]
+                    # voice,tone,volumeのいずれかが直前のデータと違っていたら、データをバッファに書き出す
+                    # ただし一番最初の時は直前の値が全てNoneなので何もしない
+                    if (svVolume != None):
+                        if (svVoice != v["id"] or svTone != v["n"] or svVolume != v["x"]):
+                            # バッファにこれまでのトーンと時間を書き出す
+                            if svVoice != "4":
+                                # トーンの時の処理
+                                buffer += [str(self.getToneValue(svTone)), str(time)]
+                            else:
+                                # ノイズの時の処理
+                                noiseTone = self.getNoiseToneValue(svTone)
+                                if noiseTone != svNoiseTone:
+                                    buffer += ["202", str(noiseTone)]
+                                    svNoiseTone = noiseTone
+                                buffer += [str(self.getToneValue(svTone)), str(time)]
+                            #音長をリセット
+                            time = 0
+
+                    # voiceが直前と変わったか判定する
+                    # 変わった場合はPSGR#6,#7の設定をバッファに出力する
+                    # データの最初にも設定が必要であるため、無条件で処理する
+                    if svVoice != v["id"] and svVoice != None and v["id"] != None:
+                        buffer += ["201", self.getMixingValue(v["id"])]
+
+                    # volumeが変わったか判定する
+                    # 変わった場合はPSGR#8〜10に設定するためのデータをバッファに出力する
+                    if svVolume != v["x"]:
+                        buffer += ["200", str(self.getVolumeValue(v["x"]))]
+
+                    # 音長をカウント
+                    time += self.speed
 
                     # トーン=None and ボリューム値=0の場合は、noneCountをインクリメント、以外はリセット
-                    if (tone is None):
+                    if (svTone is None):
                         noneCount += 1
                     else:
                         noneCount = 0
 
-                    # テスト用
-                    if v["id"] != 4:
-                        s = "tone note:" + str(v["n"])
-                    else:
-                        s = "noise tone:" + str(v["n"])
-                    s += " volume:" + str(v["x"])
-                    buffer = buffer + [tone, self.speed]
+                    # tone,voice,volumeの値を退避
+                    svTone = v["n"] 
+                    svVoice = v["id"]
+                    svVolume = (v["x"] if v["x"] != None else svVolume)
 
                     # NoneCout=32ならループ終了
                     if noneCount == 32:
                         isTerminate = True
                         break
 
-                # ここまでのバッファをデータに追加
+                if (time > 0):
+                    # バッファにこれまでのトーンと時間を書き出す
+                    if svVoice != "4":
+                        # トーンの時の処理
+                        buffer += [str(self.getToneValue(svTone)), str(time)]
+                    else:
+                        # ノイズの時の処理
+                        noiseTone = self.getNoiseToneValue(svTone)
+                        if noiseTone != svNoiseTone:
+                            data += ["202", str(noiseTone)]
+                            svNoiseTone = noiseTone
+                        buffer += [str(self.getToneValue(svTone)), str(time)]
+
+                # バッファをデータに追加
                 if isTerminate == False:
-                    data = data + buffer
+                    data += buffer
 
             # データを返却
             return data
 
-        def export(self):
+        def getToneValue(self, tone:int) -> int:
+            '''
+            トーン値取得処理
+            '''
+            return (tone - 24 if tone != None else 0)
+
+        def getNoiseToneValue(self, tone:int) -> int:
+            '''
+            ノイズトーン値取得処理
+            '''
+            return int(107-int((tone if tone != None else 1))/2.59)
+
+        def getMixingValue(self, voice:int) -> str:
+            '''
+            ミキシング値取得処理
+            '''
+            return ("10" if voice == 4 else "01")
+
+        def getVolumeValue(self, volume:int) -> int:
+            '''
+            ボリューム値取得処理
+            '''
+            return int(volume*1.25)
+
+        def export(self, outFileName:str):
             '''
             ファイルエクスポート処理
             '''
-            pass
+            # 出力ファイル名
+            outfilePath = os.path.normpath(os.path.join(os.path.dirname(__file__), outFileName))
+
+            with open(outfilePath, mode="w") as f:
+                # ヘッダー情報
+                for idx in range(3):
+                    if len(self.dumpData[idx]) > 0:
+                        f.write("    DW  TRK0" + str(idx+1) + "\n")
+                    else:
+                        f.write("    DW  $0000" + "\n")
+
+                # 各チャンネルのデータ
+                for idx, ch in enumerate(self.dumpData):
+                    if len(ch) == 0:
+                        break
+                    else:
+                        f.write("TRK0" + str(idx+1) + ":" + "\n")
+                        s = ""
+                        for i, v in enumerate(ch):
+                            if i % 16 == 0:
+                                if s != "":
+                                    f.write(s + "\n")
+                                s = "    DB   " + v
+                            else:
+                                s += ", " + v
 
 if __name__ == "__main__":
     '''
     アプリケーション実行
     '''
-    lcconv("./sample.json")
+    c = lcconv("./sample.json")
+    c.execute("./out.asm")
