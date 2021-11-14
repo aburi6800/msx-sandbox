@@ -75,6 +75,13 @@ class lcconv:
         # 出力ファイル名
         outfilePath = ""
 
+        # 各値の退避変数を初期化
+        svVoice = None
+        svNote = None
+        svVolume = None
+        svNoiseTone = None
+        svMixing = None
+
         def __init__(self, jsonFileName:str = ""):
             '''
             初期化処理
@@ -94,7 +101,7 @@ class lcconv:
             変換処理
             '''
             # speed値取得
-            self.speed = (self.data_body["speed"]) // 2
+            self.speed = int((self.data_body["speed"]) / 1.8)
             print("speed = " + str(self.speed))
 
             # 各チャネルのデータを取得
@@ -102,26 +109,14 @@ class lcconv:
             channelList = list(channels)
 
             # チャネル1～3に大してダンプデータ作成
-            self.dumpData[0] = self.makeDumpData(channelList[0])
-            print(self.dumpData[0])
-            self.dumpData[1] = self.makeDumpData(channelList[1])
-            print(self.dumpData[1])
-            self.dumpData[2] = self.makeDumpData(channelList[2])
-            print(self.dumpData[2])
-            pass
+            for i in range(3):
+                self.dumpData[i] = self.makeDumpData(channelList[i])
+                print(self.dumpData[i])
 
-        def makeDumpData(self, data):
+        def makeDumpData(self, argData):
             '''
             ダンプデータ作成処理
             '''
-            # 'sl'要素を取り出す
-            sl = data["sl"]
-
-            # データバッファ
-            buffer = []
-
-            # 出力データ
-            data = []
 
             # 空データカウント
             noneCount = 0
@@ -130,92 +125,112 @@ class lcconv:
             isTerminate = False
 
             # 各値の退避変数を初期化
-            svVoice = None
-            svTone = None
-            svVolume = None
-            svNoiseTone = None
+            self.svVoice = None
+            self.svNote = None
+            self.svVolume = None
+            self.svNoiseTone = None
+            self.svMixing = None
 
             # 音長
             time = 0
 
+            sv = {}
+
+            # データバッファ
+            buffer = []
+
+            # 'sl'要素を取り出す
+            sl = argData["sl"]
+
             # sl要素の全てに対して繰り返す(0～15)
             for vl in sl:
 
-                # データバッファ初期化
-                buffer = []
+                sv = vl["vl"][0]
+                #音長をリセット
+                time = 0
 
                 # vl要素の全てに対して繰り返す(0～31)
                 for v in vl["vl"]:
 
-                    # voice,tone,volumeのいずれかが直前のデータと違っていたら、データをバッファに書き出す
-                    # ただし一番最初の時は直前の値が全てNoneなので何もしない
-                    if (svVolume != None):
-                        if (svVoice != v["id"] or svTone != v["n"] or svVolume != v["x"]):
-                            # バッファにこれまでのトーンと時間を書き出す
-                            if svVoice != "4":
-                                # トーンの時の処理
-                                buffer += [str(self.getToneValue(svTone)), str(time)]
-                            else:
-                                # ノイズの時の処理
-                                noiseTone = self.getNoiseToneValue(svTone)
-                                if noiseTone != svNoiseTone:
-                                    buffer += ["202", str(noiseTone)]
-                                    svNoiseTone = noiseTone
-                                buffer += [str(self.getToneValue(svTone)), str(time)]
-                            #音長をリセット
-                            time = 0
+                    # voice,tone,volumeのいずれかが直前のデータと違っていたら、退避していaddBufferを呼ぶ
+                    # ただし一番最初のデータ時は直前の値が全てNoneなので何もしない
+                    if v["n"] != sv["n"] or v["id"] != sv["id"] or v["x"] != sv["x"]:
+                        buffer += self.addBuffer(sv, time)
 
-                    # voiceが直前と変わったか判定する
-                    # 変わった場合はPSGR#6,#7の設定をバッファに出力する
-                    # データの最初にも設定が必要であるため、無条件で処理する
-                    if svVoice != v["id"] and svVoice != None and v["id"] != None:
-                        buffer += ["201", self.getMixingValue(v["id"])]
+                        # データを退避
+                        sv = v
 
-                    # volumeが変わったか判定する
-                    # 変わった場合はPSGR#8〜10に設定するためのデータをバッファに出力する
-                    if svVolume != v["x"]:
-                        buffer += ["200", str(self.getVolumeValue(v["x"]))]
+                        #音長をリセット
+                        time = 0
 
                     # 音長をカウント
                     time += self.speed
 
                     # トーン=None and ボリューム値=0の場合は、noneCountをインクリメント、以外はリセット
-                    if (svTone is None):
+                    if (v["n"] is None):
                         noneCount += 1
                     else:
                         noneCount = 0
-
-                    # tone,voice,volumeの値を退避
-                    svTone = v["n"] 
-                    svVoice = v["id"]
-                    svVolume = (v["x"] if v["x"] != None else svVolume)
 
                     # NoneCout=32ならループ終了
                     if noneCount == 32:
                         isTerminate = True
                         break
 
-                if (time > 0):
-                    # バッファにこれまでのトーンと時間を書き出す
-                    if svVoice != "4":
-                        # トーンの時の処理
-                        buffer += [str(self.getToneValue(svTone)), str(time)]
-                    else:
-                        # ノイズの時の処理
-                        noiseTone = self.getNoiseToneValue(svTone)
-                        if noiseTone != svNoiseTone:
-                            data += ["202", str(noiseTone)]
-                            svNoiseTone = noiseTone
-                        buffer += [str(self.getToneValue(svTone)), str(time)]
-
-                # バッファをデータに追加
                 if isTerminate == False:
-                    data += buffer
+                    buffer += self.addBuffer(v, time)
+                else:
+                    break
 
-            # データを返却
-            return data
+            return buffer
 
-        def getToneValue(self, tone:int) -> int:
+        def addBuffer(self, vl, time):
+            '''
+            バッファ追加処理\n
+            引数の値からbufferにデータを追加する。\n
+            ただし、前回の設定値から変わっていないパラメータは設定しない。\n
+            追加するのは以下順とする。\n
+            1) mixing\n
+            2) volme\n
+            3) note or noiseTone\n
+            '''
+            dataList = []
+
+            # voiceが前回の設定値から変わったか判定する
+            # 変わった場合はコマンドとPSGR#6,#7の設定値をバッファに出力する
+            if self.svVoice != vl["id"]:
+                mixing = self.getMixingValue(vl["id"])
+                if mixing != self.svMixing:
+                    # ミキシングの値が変わった場合のみバッファに出力する
+                    dataList += ["201", mixing]
+                    self.svMixing = mixing
+                    self.svVoice = vl["id"]
+
+            # volumeが前回の設定値から変わったか判定する
+            # 変わった場合はコマンドとPSGR#8〜10に設定値をバッファに出力する
+            if self.svVolume != vl["x"]:
+                if vl["n"] == None:
+                    # なぜかnoteがNoneでもvolumeが設定されていることがあるため、対処する
+                    vl["x"] = 0
+                dataList += ["200", str(self.getVolumeValue(vl["x"]))]
+                self.svVolume = vl["x"]
+
+            # noteは無条件でバッファに出力する
+            if self.svMixing == "%10":
+                # トーンの時の処理
+                dataList += [str(self.getNoteValue(vl["n"])), str(time)]
+            else:
+                # ノイズの時の処理
+                noiseTone = self.getNoiseToneValue(vl["n"])
+                if noiseTone != self.svNoiseTone:
+                    dataList += ["202", str(noiseTone)]
+                    self.svNoiseTone = noiseTone
+                dataList += [str(self.getNoteValue(vl["n"])), str(time)]
+
+            return dataList
+
+
+        def getNoteValue(self, tone:int) -> int:
             '''
             トーン値取得処理
             '''
@@ -225,13 +240,13 @@ class lcconv:
             '''
             ノイズトーン値取得処理
             '''
-            return int(107-int((tone if tone != None else 1))/2.59)
+            return int((107-int(tone if tone != None else 1))/2.59)
 
         def getMixingValue(self, voice:int) -> str:
             '''
             ミキシング値取得処理
             '''
-            return ("10" if voice == 4 else "01")
+            return ("%01" if voice == 3 else "%10")
 
         def getVolumeValue(self, volume:int) -> int:
             '''
@@ -248,30 +263,34 @@ class lcconv:
 
             with open(outfilePath, mode="w") as f:
                 # ヘッダー情報
+                f.write("    DB  0\n")
                 for idx in range(3):
                     if len(self.dumpData[idx]) > 0:
                         f.write("    DW  TRK0" + str(idx+1) + "\n")
                     else:
-                        f.write("    DW  $0000" + "\n")
+                        f.write("    DW  $0000\n")
 
                 # 各チャンネルのデータ
                 for idx, ch in enumerate(self.dumpData):
                     if len(ch) == 0:
                         break
                     else:
-                        f.write("TRK0" + str(idx+1) + ":" + "\n")
+                        f.write("TRK0" + str(idx+1) + ":\n")
                         s = ""
                         for i, v in enumerate(ch):
                             if i % 16 == 0:
                                 if s != "":
-                                    f.write(s + "\n")
-                                s = "    DB   " + v
+                                    f.write("    DB  " + s + "\n")
+                                s =  v
                             else:
                                 s += ", " + v
+                        if s != "":
+                            f.write("    DB  " + s + "\n")
+                        f.write("    DB  255\n")
 
 if __name__ == "__main__":
     '''
     アプリケーション実行
     '''
-    c = lcconv("./sample.json")
+    c = lcconv("./18.jsonl")
     c.execute("./out.asm")
