@@ -6,3 +6,5 @@
 *.rel
 *.sym
 *.err
+*.pyc
+
