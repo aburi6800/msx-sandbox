@@ -160,11 +160,21 @@ class dataClass:
         for vl in sl:
 
             sv = vl["vl"][0]
+            # ver1.2.0未満のデータ対応
+            # sv["x"]が存在しなければ固定値で追加する
+            if "x" not in sv:
+                sv["x"] = 12
+
             #音長をリセット
             time = 0
 
             # vl要素の全てに対して繰り返す(0～31)
             for v in vl["vl"]:
+
+                # ver1.2.0未満のデータ対応
+                # v["x"]が存在しなければ固定値で追加する
+                if "x" not in v:
+                    v["x"] = 12
 
                 # voice,tone,volumeのいずれかが直前のデータと違っていたら、退避していaddBufferを呼ぶ
                 # ただし一番最初のデータ時は直前の値が全てNoneなので何もしない
@@ -310,7 +320,7 @@ if __name__ == "__main__":
     '''
     アプリケーション実行
     '''
-#    execute(["", "19.jsonl"])
+    execute(["", "00.jsonl"])
 
-    import sys
-    execute(sys.argv)
+#    import sys
+#    execute(sys.argv)
