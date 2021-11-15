@@ -10,6 +10,36 @@ _main:
 ; テスト用の処理
 ; ====================================================================================================
 INIT:
+    ; ■画面初期化
+    CALL SCREEN_INIT
+
+    ; ■フォントパターン定義
+    CALL SET_FONT_PATTERN
+
+    ; ■文字列表示
+    LD DE,STRDATA1
+    CALL PRTFIXSTR
+    LD DE,STRDATA2
+    CALL PRTFIXSTR
+    LD DE,STRDATA3
+    CALL PRTFIXSTR
+    LD DE,STRDATA4
+    CALL PRTFIXSTR
+    LD DE,STRDATA5
+    CALL PRTFIXSTR
+    LD DE,STRDATA6
+    CALL PRTFIXSTR
+    LD DE,STRDATA7
+    CALL PRTFIXSTR
+    LD DE,STRDATA8
+    CALL PRTFIXSTR
+    LD DE,STRDATA9
+    CALL PRTFIXSTR
+    LD DE,STRDATA10
+    CALL PRTFIXSTR
+    LD DE,STRDATA11
+    CALL PRTFIXSTR
+
     ; ■ドライバ初期化
     ;   利用するアプリケーションで行う処理
     CALL SOUNDDRV_INIT
@@ -69,62 +99,144 @@ MAINLOOP_VSYNC:
 
 
 PLAY0:
-    ; ■音を止める
+;    CALL PUSHALL
+;    CALL CLRCUR
+;    CALL POPALL
+
     CALL SOUNDDRV_STOP
     JP MAINLOOP_L4
 
 PLAY1:
-    ; ■音を鳴らす
+;    CALL PUSHALL
+;    LD HL,32*7+2
+;    CALL WRTCUR
+;    CALL POPALL
+
     LD HL,MUSIC01
     CALL SOUNDDRV_PLAY
     JP MAINLOOP_L4
 
 PLAY2:
-    ; ■音を鳴らす
-    LD HL,SFX02
-    CALL SOUNDDRV_SFXPLAY
-    JP MAINLOOP_L4
+;    CALL PUSHALL
+;    LD HL,32*8+2
+;    CALL WRTCUR
+;    CALL POPALL
 
-PLAY3:
-    ; ■音を鳴らす
-    LD HL,SFX05
-    CALL SOUNDDRV_SFXPLAY
-    JP MAINLOOP_L4
-
-PLAY4:
-    ; ■音を鳴らす
-    LD HL,SFX03
-    CALL SOUNDDRV_SFXPLAY
-    JP MAINLOOP_L4
-
-PLAY5:
-    ; ■音を鳴らす
-    LD HL,SFX01
-    CALL SOUNDDRV_SFXPLAY
-    JP MAINLOOP_L4
-
-PLAY6:
-    ; ■音を鳴らす
-    LD HL,SFX04
-    CALL SOUNDDRV_SFXPLAY
-    JP MAINLOOP_L4
-
-PLAY7:
     LD HL,_18
     CALL SOUNDDRV_PLAY
     JP MAINLOOP_L4
 
-PLAY8:
-    ; ■音を鳴らす
+PLAY3:
+;    CALL PUSHALL
+;    LD HL,32*9+2
+;    CALL WRTCUR
+;    CALL POPALL
+
     LD HL,_19
     CALL SOUNDDRV_PLAY
     JP MAINLOOP_L4
 
-PLAY9:
-    ; ■音を止める
+PLAY4:
+;    CALL PUSHALL
+;    LD HL,32*10+2
+;    CALL WRTCUR
+;    CALL POPALL
+
     LD HL,_20
     CALL SOUNDDRV_PLAY
     JP MAINLOOP_L4
+
+PLAY5:
+;    CALL PUSHALL
+;    LD HL,32*11+2
+;    CALL WRTCUR
+;    CALL POPALL
+
+    LD HL,SFX04
+    CALL SOUNDDRV_SFXPLAY
+    JP MAINLOOP_L4
+
+PLAY6:
+;    CALL PUSHALL
+;    LD HL,32*12+2
+;    CALL WRTCUR
+;    CALL POPALL
+
+    LD HL,SFX02
+    CALL SOUNDDRV_SFXPLAY
+    JP MAINLOOP_L4
+
+PLAY7:
+;    CALL PUSHALL
+;    LD HL,32*13+2
+;    CALL WRTCUR
+;    CALL POPALL
+
+    LD HL,SFX05
+    CALL SOUNDDRV_SFXPLAY
+    JP MAINLOOP_L4
+
+PLAY8:
+;    CALL PUSHALL
+;    LD HL,32*14+2
+;    CALL WRTCUR
+;    CALL POPALL
+
+    LD HL,SFX03
+    CALL SOUNDDRV_SFXPLAY
+    JP MAINLOOP_L4
+
+PLAY9:
+;    CALL PUSHALL
+;    LD HL,32*15+2
+;    CALL WRTCUR
+;    CALL POPALL
+
+    LD HL,SFX01
+    CALL SOUNDDRV_SFXPLAY
+    JP MAINLOOP_L4
+
+WRTCUR:
+    RET
+    PUSH HL
+    CALL CLRCUR
+    POP HL
+    LD DE,CURDATA1
+    CALL PRTSTR
+
+    RET
+
+CLRCUR:
+    RET
+    LD B,10
+    LD HL,32*7+2
+
+CLRCUR_L1:
+    LD DE,CURDATA0
+    PUSH BC
+    CALL PRTSTR
+    POP BC
+    LD DE,32
+    ADD HL,DE
+    DJNZ CLRCUR_L1
+
+    RET
+
+PUSHALL:
+    PUSH AF
+    PUSH BC
+    PUSH DE
+    PUSH HL
+
+    RET
+
+POPALL:
+    POP HL
+    POP DE
+    POP BC
+    POP AF
+
+    RET
 
 
 ; ====================================================================================================
@@ -190,6 +302,91 @@ GET_KEYMATRIX_SUB_L3:
     DJNZ GET_KEYMATRIX_SUB_L1
 
     RET
+
+
+; ====================================================================================================
+; 画面初期化
+; ====================================================================================================
+SCREEN_INIT:
+    ; ■COLOR 15,1,1
+    LD A,15                         ; Aレジスタに文字色をロード 
+    LD (FORCLR),A                   ; Aレジスタの値をワークエリアに格納
+    LD A,1                          ; Aレジスタに全景色をロード
+    LD (BAKCLR),A                   ; Aレジスタの値をワークエリアに格納
+;    LD A,1                         ; Aレジスタに背景色をロード
+    LD (BDRCLR),A                   ; Aレジスタの値をワークエリアに格納
+
+    ; ■SCREEN 1,2,0
+    LD A,(REG1SAV)                  ; AレジスタにVDPコントロールレジスタ1の値をロード
+    OR 2                            ; ビット2を立てる(=スプライトモードを16x16に設定)
+    LD (REG1SAV),A                  ; Aレジスタの値をVDPコントロールレジスタ1のワークエリアに格納
+    LD A,1                          ; Aレジスタにスクリーンモードの値を設定
+    CALL CHGMOD                     ; BIOS スクリーンモード変更
+    LD A,0                          ; Aレジスタにキークリックスイッチの値(0=OFF)をロード
+    LD (CLIKSW),A                   ; Aレジスタの値をワークエリアに格納
+
+    ; ■WIDTH 32
+    LD A,32                         ; AレジスタにWIDTHの値を設定
+    LD (LINL32),A                   ; Aレジスタの値をワークエリアに格納
+
+    ; ■KEY OFF
+    CALL ERAFNC                     ; BIOS ファンクションキー非表示
+
+    RET
+
+
+; ====================================================================================================
+; フォントパターン定義
+; ====================================================================================================
+SET_FONT_PATTERN:
+	LD HL,FONT_PTN_DATA			    ; HLレジスタに転送元データの先頭アドレスを設定
+    LD DE,PTN_GEN_ADDR+32*8         ; DEレジスタに転送先アドレスを設定
+	LD BC,8*64					    ; BCレジスタにデータサイズを指定
+    CALL LDIRVM					    ; BIOS VRAMブロック転送
+
+    RET
+
+
+; ====================================================================================================
+; 文字列固定位置表示サブルーチン
+; IN  : DE = 表示文字データの開始アドレス
+; HLレジスタを破壊します
+; ====================================================================================================
+PRTFIXSTR:
+    LD A,(DE)                       ; DE <- HLアドレスの示す表示位置データ
+    LD L,A
+    INC DE
+    LD A,(DE)
+    LD H,A
+    INC DE                          ; DE <- 文字列データの先頭アドレス
+
+; ====================================================================================================
+; 文字列表示サブルーチン
+; IN  : HL = 表示位置（y*32+x）
+;       DE = 表示文字データの開始アドレス
+; BCレジスタを破壊します
+; ====================================================================================================
+PRTSTR:
+    LD BC,PTN_NAME_ADDR             ; BC <- パターンネームテーブルの先頭アドレス
+    ADD HL,BC                       ; HL=HL+BC
+
+PRTSTR_L1:
+	LD A,(DE)				        ; AレジスタにDEレジスタの示すアドレスのデータを取得
+	OR 0					        ; 0かどうか
+    JR Z,PRTSTR_END			        ; 0の場合はPRTENDへ
+
+	CALL WRTVRM				        ; BIOS WRTVRM呼び出し
+	    					        ; - HL : 書き込み先のVRAMアドレス
+    	                            ; - A  : 書き込むデータ
+
+	INC HL					        ; HL=HL+1
+    INC DE					        ; DE=DE+1
+    JR PRTSTR_L1
+
+PRTSTR_END:
+	RET
+
+
 
 
 ; ====================================================================================================
@@ -449,18 +646,18 @@ SOUNDDRV_EXEC:
     OR A
     JP Z,SOUNDDRV_EXIT              ; ゼロ(停止)なら抜ける
 
-    ; ■各チャンネルの処理
-    LD A,4                          ; A <- 4(SFXチャンネル0=ChA)
+    ; ■各トラックの処理
+    LD A,0                          ; A <- 0(BGMトラック0=ChA)
     CALL SOUNDDRV_CHEXEC
-    LD A,5                          ; A <- 5(SFXチャンネル1=ChB)
+    LD A,1                          ; A <- 1(BGMトラック1=ChB)
     CALL SOUNDDRV_CHEXEC
-    LD A,6                          ; A <- 6(SFXチャンネル2=ChC)
+    LD A,2                          ; A <- 2(BGMトラック2=ChC)
     CALL SOUNDDRV_CHEXEC
-    LD A,0                          ; A <- 0(BGMチャンネル0=ChA)
+    LD A,4                          ; A <- 4(SFXトラック0=ChA)
     CALL SOUNDDRV_CHEXEC
-    LD A,1                          ; A <- 1(BGMチャンネル1=ChB)
+    LD A,5                          ; A <- 5(SFXトラック1=ChB)
     CALL SOUNDDRV_CHEXEC
-    LD A,2                          ; A <- 2(BGMチャンネル2=ChC)
+    LD A,6                          ; A <- 6(SFXトラック2=ChC)
     CALL SOUNDDRV_CHEXEC
 
     ; ■チャンネル全体の処理
@@ -505,6 +702,7 @@ SOUNDDRV_CHEXEC_L2:
 
 SOUNDDRV_CHEXEC_L21:
     ; ■コマンドによる分岐
+    ; @ToDo : ここの分岐はもう少しスマートにしたい、ノート番号が多く出現するので200未満の時を優先に
     CP 200                          ; データ=200(ボリューム)か
     JP Z,SOUNDDRV_CHEXEC_CMD200     ; ボリューム設定処理へ
 
@@ -636,27 +834,13 @@ SOUNDDRV_SETMIXING:
     ;     bit1:Noise
     LD B,3                          ; ループ回数
 
-    LD A,0
+    LD A,%00
     LD (SOUNDDRV_WK_MIXING_TONE),A  ; A -> PSGレジスタ7のWK(bit0〜2:Tone設定用)初期化
     LD (SOUNDDRV_WK_MIXING_NOISE),A ; A -> PSGレジスタ7のWK(bit3〜5:Noise設定用)初期化
 
 SOUNDDRV_SETMIXING_L1:
     ; ■各トラックのミキシング値のアドレスを設定する
-    ;   BGMトラックのトラックデータ先頭アドレスを求める
     ;   Ch2,1,0の順に処理する
-    LD A,B                          ; A <- B(1〜3)
-    SUB 1                           ; Aを-1して、トラック番号0〜2とする
-    CALL SOUNDDRV_GETWKADDR         ; HL <- BGMワークエリアの先頭アドレス
-    INC HL                          ; @ToDo:トラックデータの先頭アドレスを求めることが多いので、ワークの持ち方を見直したい(毎回21ステートかかってる)
-    INC HL
-    INC HL
-
-    ;   BGMトラックのトラックデータ先頭アドレスを判定
-    LD A,(HL)                       ; トラックデータの先頭アドレスが$0000か
-    INC HL
-    OR (HL)
-    JR NZ,SOUNDDRV_SETMIXING_L2     ; ゼロでないならBGMトラックが設定されているので、次の処理へ
-
     ;   SFXトラックのトラックデータ先頭アドレスを求める
     LD A,B                          ; A <- B(1〜3)
     ADD A,3                         ; Aに+3して、トラック番号4〜6(SFXトラック1〜3)とする
@@ -669,10 +853,24 @@ SOUNDDRV_SETMIXING_L1:
     LD A,(HL)                       ; トラックデータの先頭アドレスが$0000か
     INC HL
     OR (HL)
-    JR NZ,SOUNDDRV_SETMIXING_L2     ; ゼロでないならBGMトラックが設定されているので、次の処理へ
+    JR NZ,SOUNDDRV_SETMIXING_L2     ; ゼロでないならSFXトラックが設定されているので、次の処理へ
 
-    ; BGMもSFXも未設定の場合は、ミキシング値を%11にする
-    LD D,%00000011
+    ;   BGMトラックのトラックデータ先頭アドレスを求める
+    LD A,B                          ; A <- B(1〜3)
+    SUB 1                           ; Aを-1して、トラック番号0〜2とする
+    CALL SOUNDDRV_GETWKADDR         ; HL <- BGMワークエリアの先頭アドレス
+    INC HL                          ; @ToDo:トラックデータの先頭アドレスを求めることが多いので、ワークの持ち方を見直したい(毎回21ステートかかってる)
+    INC HL
+    INC HL
+
+    ;   BGMトラックのトラックデータ先頭アドレスを判定
+    LD A,(HL)                       ; トラックデータの先頭アドレスが$0000か
+    INC HL
+    OR (HL)
+    JR NZ,SOUNDDRV_SETMIXING_L2     ; ゼロでないならBGMトラックが設定されているので、次の処理をスキップ
+
+    ; BGMもSFXも未設定の場合は、ミキシング値を%11(Noise,Tone=Off)にする
+    LD D,%11
     JR SOUNDDRV_SETMIXING_L3
 
 SOUNDDRV_SETMIXING_L2:
@@ -822,8 +1020,35 @@ SECTION rodata_user
 
 GICINI:	                EQU $0090	; PSGの初期化アドレス
 WRTPSG:	                EQU $0093   ; PSGレジスタへのデータ書込アドレス
-GTTRIG:                 EQU $00D8   ; BIOS トリガボタンの状態取得
+
+; ■BIOSアドレス定義
+RDVRM:		            EQU $004A	; BIOS RDVRM
+WRTVRM:		            EQU $004D	; BIOS WRTVRM
+FILVRM:			        EQU	$0056	; BIOS VRAM指定領域同一データ転送
+LDIRVM:			        EQU	$005C	; BIOS VRAMブロック転送
+CHGMOD:                 EQU $005F   ; BIOS スクリーンモード変更
+ERAFNC:                 EQU $00CC   ; BIOS ファンクションキー非表示
 SNSMAT:                 EQU $0141   ; BIOS キーマトリクススキャン
+KILBUF:                 EQU $0156   ; BIOS キーバッファクリア
+GTSTCK:                 EQU $00D5   ; BIOS ジョイスティックの状態取得
+GTTRIG:                 EQU $00D8   ; BIOS トリガボタンの状態取得
+
+; ■システムワークエリアアドレス定義
+REG0SAV:                EQU $F3DF   ; VDPコントロールレジスタ0
+REG1SAV:                EQU $F3E0   ; VDPコントロールレジスタ1
+FORCLR:                 EQU $F3E9   ; 前景色
+BAKCLR:                 EQU $F3EA   ; 背景色
+BDRCLR:                 EQU $F3EB   ; 周辺色
+LINL32:                 EQU $F3AF   ; WIDTH値
+CLIKSW:                 EQU $F3DB   ; キークリックスイッチ(0:OFF,0以外:ON)
+INTCNT:                 EQU $FCA2   ; システムで1/60秒でインクリメントするワークエリア
+
+; ■VRAMワークエリアアドレス定義
+PTN_GEN_ADDR:           EQU $0000   ; VRAM パターンジェネレータテーブルの先頭アドレス
+PTN_NAME_ADDR:          EQU $1800   ; VRAM パターンネームテーブルの先頭アドレス
+COLOR_TABLE_ADDR:       EQU $2000   ; VRAM カラーテーブルの先頭アドレス
+SPR_PTN_ADDR:	        EQU $3800	; VRAM スプライトパターンジェネレータの先頭アドレス
+SPR_ATR_ADDR:	        EQU	$1B00	; VRAM スプライトアトリビュートエリアの先頭アドレス
 
 SOUNDDRV_STATE_STOP:    EQU 0       ; サウンドドライバ状態：停止
 SOUNDDRV_STATE_PLAY:    EQU 1       ; サウンドドライバ状態：演奏中
@@ -1058,7 +1283,7 @@ _18_TRK1:
     DB  42, 12, 40, 12, 45, 12, 48, 12, 50, 12, 51, 12, 57, 6, 200, 12
     DB  57, 6, 200, 15, 52, 6, 50, 6, 48, 12, 45, 12, 43, 12, 44, 12
     DB  45, 12, 200, 0, 0, 12
-    DB  255
+    DB  254
 _18_TRK2:
     DB  201, %10, 200, 15, 21, 6, 200, 0, 0, 6, 200, 15, 21, 6, 200, 0
     DB  0, 6, 200, 15, 33, 6, 200, 0, 0, 6, 200, 15, 33, 6, 200, 0
@@ -1092,7 +1317,7 @@ _18_TRK2:
     DB  0, 6, 200, 15, 16, 6, 200, 0, 0, 6, 200, 15, 28, 6, 200, 0
     DB  0, 6, 200, 15, 21, 6, 200, 0, 0, 6, 200, 15, 33, 6, 200, 0
     DB  0, 6, 200, 15, 33, 6, 200, 0, 0, 6, 200, 0, 0, 6, 0, 6
-    DB  255
+    DB  254
 
 _19:
     DB  0
@@ -1104,7 +1329,7 @@ _19_TRK1:
     DB  52, 12, 54, 12, 49, 12, 47, 12, 45, 12, 42, 12, 45, 48, 42, 12
     DB  45, 12, 47, 12, 45, 12, 49, 12, 47, 12, 45, 12, 47, 12, 49, 12
     DB  45, 24, 42, 12, 40, 48
-    DB  255
+    DB  254
 _19_TRK2:
     DB  201, %10, 200, 15, 21, 6, 200, 0, 0, 6, 200, 15, 21, 6, 200, 0
     DB  0, 6, 200, 15, 33, 6, 200, 0, 0, 6, 200, 15, 33, 6, 200, 0
@@ -1123,7 +1348,7 @@ _19_TRK2:
     DB  0, 6, 200, 15, 21, 6, 200, 0, 0, 6, 200, 15, 21, 6, 200, 0
     DB  0, 6, 200, 15, 33, 6, 200, 0, 0, 6, 200, 15, 33, 6, 200, 0
     DB  0, 6
-    DB  255
+    DB  254
 
 _20:
     DB  0
@@ -1135,7 +1360,7 @@ _20_TRK1:
     DB  38, 12, 40, 12, 38, 12, 36, 12, 33, 12, 38, 12, 37, 12, 33, 36
     DB  38, 12, 36, 12, 33, 12, 31, 12, 33, 12, 36, 12, 38, 12, 39, 12
     DB  40, 12, 44, 12, 40, 12, 38, 12, 37, 48
-    DB  255
+    DB  254
 _20_TRK2:
     DB  201, %10, 200, 15, 21, 6, 200, 0, 0, 6, 200, 15, 21, 6, 200, 0
     DB  0, 6, 200, 15, 33, 6, 200, 0, 0, 6, 200, 15, 33, 6, 200, 0
@@ -1154,7 +1379,7 @@ _20_TRK2:
     DB  0, 6, 200, 15, 21, 6, 200, 0, 0, 6, 200, 15, 21, 6, 200, 0
     DB  0, 6, 200, 15, 33, 6, 200, 0, 0, 6, 200, 15, 33, 6, 200, 0
     DB  0, 6
-    DB  255
+    DB  254
 
 ; ----------------------------------------------------------------------------------------------------
 ; 以降はサウンドドライバでは未使用
@@ -1163,12 +1388,117 @@ _20_TRK2:
 KEY_ON:                 EQU $01     ; キーオン
 KEY_OFF:                EQU $00     ; キーオフ
 
+; ■フォントパターンデータ
+; &H0100〜
+FONT_PTN_DATA:
+    DB $00,$00,$00,$00,$00,$00,$00,$00
+    DB $1C,$1C,$18,$18,$10,$00,$30,$30
+    DB $36,$36,$12,$24,$00,$00,$00,$00
+    DB $36,$36,$7F,$36,$7F,$36,$36,$00
+    DB $08,$3E,$68,$3E,$0B,$3E,$08,$00
+    DB $71,$52,$64,$08,$13,$25,$47,$00
+    DB $30,$48,$58,$33,$6A,$44,$3B,$00
+    DB $18,$18,$08,$10,$00,$00,$00,$00
+    DB $0C,$18,$30,$30,$30,$18,$0C,$00
+    DB $18,$0C,$06,$06,$06,$0C,$18,$00
+    DB $18,$5A,$3C,$18,$3C,$5A,$18,$00
+    DB $00,$18,$18,$7E,$18,$18,$00,$00
+    DB $00,$00,$00,$00,$30,$10,$20,$00
+    DB $00,$00,$00,$3E,$00,$00,$00,$00
+    DB $00,$00,$00,$00,$00,$18,$18,$00
+    DB $03,$07,$0E,$1C,$38,$70,$60,$00
+    DB $1C,$26,$63,$63,$63,$32,$1C,$00
+    DB $0C,$1C,$0C,$0C,$0C,$0C,$3F,$00
+    DB $3E,$63,$07,$1E,$3C,$70,$7F,$00
+    DB $3F,$06,$0C,$1E,$03,$63,$3E,$00
+    DB $0E,$1E,$36,$66,$7F,$06,$06,$00
+    DB $7E,$60,$7E,$03,$03,$63,$3E,$00
+    DB $1E,$30,$60,$7E,$63,$63,$3E,$00
+    DB $7F,$63,$06,$0C,$18,$18,$18,$00
+    DB $3C,$62,$72,$3C,$4F,$43,$3E,$00
+    DB $3E,$63,$63,$3F,$03,$06,$3C,$00
+    DB $00,$18,$18,$00,$18,$18,$00,$00
+    DB $00,$18,$18,$00,$18,$08,$10,$00
+    DB $06,$0C,$18,$30,$18,$0C,$06,$00
+    DB $00,$00,$7F,$00,$00,$7F,$00,$00
+    DB $30,$18,$0C,$06,$0C,$18,$30,$00
+    DB $3E,$63,$63,$06,$0C,$00,$0C,$0C
+    DB $3E,$41,$5D,$55,$5F,$4C,$3E,$00
+    DB $1C,$36,$63,$63,$7F,$63,$63,$00
+    DB $7E,$63,$63,$7E,$63,$63,$7E,$00
+    DB $1E,$33,$60,$60,$60,$33,$1E,$00
+    DB $7C,$66,$63,$63,$63,$66,$7C,$00
+    DB $3F,$30,$30,$3E,$30,$30,$3F,$00
+    DB $7F,$60,$60,$7E,$60,$60,$60,$00
+    DB $1F,$30,$60,$67,$63,$33,$1F,$00
+    DB $63,$63,$63,$7F,$63,$63,$63,$00
+    DB $3F,$0C,$0C,$0C,$0C,$0C,$3F,$00
+    DB $03,$03,$03,$03,$03,$63,$3E,$00
+    DB $63,$66,$6C,$78,$7C,$6E,$67,$00
+    DB $30,$30,$30,$30,$30,$30,$3F,$00
+    DB $63,$77,$7F,$7F,$6B,$63,$63,$00
+    DB $63,$73,$7B,$7F,$6F,$67,$63,$00
+    DB $3E,$63,$63,$63,$63,$63,$3E,$00
+    DB $7E,$63,$63,$63,$7E,$60,$60,$00
+    DB $3E,$63,$63,$63,$6F,$66,$3D,$00
+    DB $7E,$63,$63,$67,$7C,$6E,$67,$00
+    DB $3C,$66,$60,$3E,$03,$63,$3E,$00
+    DB $3F,$0C,$0C,$0C,$0C,$0C,$0C,$00
+    DB $63,$63,$63,$63,$63,$63,$3E,$00
+    DB $63,$63,$63,$77,$3E,$1C,$08,$00
+    DB $63,$63,$6B,$7F,$7F,$77,$63,$00
+    DB $63,$77,$3E,$1C,$3E,$77,$63,$00
+    DB $33,$33,$33,$1E,$0C,$0C,$0C,$00
+    DB $7F,$07,$0E,$1C,$38,$70,$7F,$00
+    DB $3C,$30,$30,$30,$30,$30,$3C,$00
+    DB $66,$3C,$18,$7E,$18,$7E,$18,$00
+    DB $3C,$0C,$0C,$0C,$0C,$0C,$3C,$00
+    DB $1C,$36,$63,$00,$00,$00,$00,$00
+    DB $00,$00,$00,$00,$00,$00,$7F,$00
+
 ; ■表示文字列データ
 ; dw : 表示先のVRAMアドレスのオフセット値(下位/上位)    
 ; db : 表示文字列、最後に0を設定すること
-STRDATA:
-    DW $C600
-	DB "0 1 2 3 4 5 6 7 8 9",0
+STRDATA1:
+    DW 32*3+6
+	DB "MSX PSG DRIVER TEST",0
+STRDATA2:
+    DW 32*4+6
+	DB "-------------------",0
+STRDATA3:
+    DW 32*7+3
+	DB "[1] BGM(XEVIOUS)",0
+STRDATA4:
+    DW 32*8+3
+	DB "[2] BGM(NEW RALLY-X BGMC)",0
+STRDATA5:
+    DW 32*9+3
+	DB "[3] BGM(NEW RALLY-X BGMA)",0
+STRDATA6:
+    DW 32*10+3
+	DB "[4] BGM(NEW RALLY-X BGMB)",0
+STRDATA7:
+    DW 32*11+3
+	DB "[5] SFX(XEVIOUS CREDIT)",0
+STRDATA8:
+    DW 32*12+3
+	DB "[6] SFX(XEVIOUS ZAPPER)",0
+STRDATA9:
+    DW 32*13+3
+	DB "[7] SFX(XEVIOUS BLASTER)",0
+STRDATA10:
+    DW 32*14+3
+	DB "[8] SFX(XEVIOUS DESTRUCTION)",0
+STRDATA11:
+    DW 32*15+3
+	DB "[9] SFX(XEVIOUS BACULLA)",0
+STRDATA12:
+    DW 32*15+3
+	DB "[0] STOP",0
+CURDATA0:
+    DB " ",0
+CURDATA1:
+    DB ">",0
 
 ; ====================================================================================================
 ; ワークエリア
