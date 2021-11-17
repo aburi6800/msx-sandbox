@@ -202,6 +202,7 @@ class dataClass:
                     break
 
             if isTerminate == False:
+                # @ToDo : ここまでのボリューム値の合計を求めて、0の時は追加しないようする
                 buffer += self.addBuffer(v, time)
             else:
                 break
@@ -320,7 +321,7 @@ if __name__ == "__main__":
     '''
     アプリケーション実行
     '''
-    execute(["", "00.jsonl"])
+#    execute(["", "00.jsonl"])
 
-#    import sys
-#    execute(sys.argv)
+    import sys
+    execute(sys.argv)
