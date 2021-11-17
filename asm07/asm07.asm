@@ -9,6 +9,11 @@ _main:
 ; ====================================================================================================
 ; テスト用の処理
 ; ====================================================================================================
+ASM07:
+    CALL INIT
+    CALL MAINLOOP
+    JP ASM07
+
 INIT:
     ; ■画面初期化
     CALL SCREEN_INIT
@@ -39,10 +44,21 @@ INIT:
     CALL PRTFIXSTR
     LD DE,STRDATA11
     CALL PRTFIXSTR
+    LD DE,STRDATA12
+    CALL PRTFIXSTR
 
     ; ■ドライバ初期化
     ;   利用するアプリケーションで行う処理
+    ;   割り込みフック書き換え前に行う
     CALL SOUNDDRV_INIT
+
+    ; ■H.TIMI割り込みフック書き換え
+    DI                              ; 割り込み禁止
+    LD A,$C3                        ; JP
+    LD HL,SOUNDDRV_EXEC             ; サウンドドライバのアドレス
+    LD (H_TIMI+0),A
+    LD (H_TIMI+1),HL
+    EI                              ; 割り込み許可
 
 MAINLOOP:
     CALL GET_KEYMATRIX              ; キーマトリクス取得
@@ -90,153 +106,139 @@ MAINLOOP_L4:
 MAINLOOP_VSYNC:
     ; ■ここがドライバ本体
     ;   最終的には割り込み処理として入れたい
-    CALL SOUNDDRV_EXEC
+;    CALL SOUNDDRV_EXEC
 
 	; ■垂直帰線待ち
-	HALT
+;	HALT
 
 	JR MAINLOOP
 
 
 PLAY0:
-;    CALL PUSHALL
-;    CALL CLRCUR
-;    CALL POPALL
+    LD HL,$0000
+    CALL WRTCUR
 
     CALL SOUNDDRV_STOP
     JP MAINLOOP_L4
 
 PLAY1:
-;    CALL PUSHALL
-;    LD HL,32*7+2
-;    CALL WRTCUR
-;    CALL POPALL
+    LD HL,32*7+2
+    CALL WRTCUR
 
     LD HL,MUSIC01
     CALL SOUNDDRV_PLAY
     JP MAINLOOP_L4
 
 PLAY2:
-;    CALL PUSHALL
-;    LD HL,32*8+2
-;    CALL WRTCUR
-;    CALL POPALL
+    LD HL,32*8+2
+    CALL WRTCUR
 
     LD HL,_18
     CALL SOUNDDRV_PLAY
     JP MAINLOOP_L4
 
 PLAY3:
-;    CALL PUSHALL
-;    LD HL,32*9+2
-;    CALL WRTCUR
-;    CALL POPALL
+    LD HL,32*9+2
+    CALL WRTCUR
 
     LD HL,_19
     CALL SOUNDDRV_PLAY
     JP MAINLOOP_L4
 
 PLAY4:
-;    CALL PUSHALL
-;    LD HL,32*10+2
-;    CALL WRTCUR
-;    CALL POPALL
+    LD HL,32*10+2
+    CALL WRTCUR
 
     LD HL,_20
     CALL SOUNDDRV_PLAY
     JP MAINLOOP_L4
 
 PLAY5:
-;    CALL PUSHALL
-;    LD HL,32*11+2
-;    CALL WRTCUR
-;    CALL POPALL
+    LD HL,32*11+2
+    CALL WRTCUR
 
     LD HL,SFX04
     CALL SOUNDDRV_SFXPLAY
     JP MAINLOOP_L4
 
 PLAY6:
-;    CALL PUSHALL
-;    LD HL,32*12+2
-;    CALL WRTCUR
-;    CALL POPALL
+    LD HL,32*12+2
+    CALL WRTCUR
 
     LD HL,SFX02
     CALL SOUNDDRV_SFXPLAY
     JP MAINLOOP_L4
 
 PLAY7:
-;    CALL PUSHALL
-;    LD HL,32*13+2
-;    CALL WRTCUR
-;    CALL POPALL
+    LD HL,32*13+2
+    CALL WRTCUR
 
     LD HL,SFX05
     CALL SOUNDDRV_SFXPLAY
     JP MAINLOOP_L4
 
 PLAY8:
-;    CALL PUSHALL
-;    LD HL,32*14+2
-;    CALL WRTCUR
-;    CALL POPALL
+    LD HL,32*14+2
+    CALL WRTCUR
 
     LD HL,SFX03
     CALL SOUNDDRV_SFXPLAY
     JP MAINLOOP_L4
 
 PLAY9:
-;    CALL PUSHALL
-;    LD HL,32*15+2
-;    CALL WRTCUR
-;    CALL POPALL
+    LD HL,32*15+2
+    CALL WRTCUR
 
     LD HL,SFX01
     CALL SOUNDDRV_SFXPLAY
     JP MAINLOOP_L4
 
 WRTCUR:
-    RET
-    PUSH HL
-    CALL CLRCUR
-    POP HL
-    LD DE,CURDATA1
-    CALL PRTSTR
-
-    RET
-
-CLRCUR:
-    RET
-    LD B,10
-    LD HL,32*7+2
-
-CLRCUR_L1:
-    LD DE,CURDATA0
-    PUSH BC
-    CALL PRTSTR
-    POP BC
-    LD DE,32
-    ADD HL,DE
-    DJNZ CLRCUR_L1
-
-    RET
-
-PUSHALL:
-    PUSH AF
     PUSH BC
     PUSH DE
     PUSH HL
 
-    RET
+    LD DE,CURDATA0
+    LD HL,32*7+2
+    CALL PRTSTR
+    LD DE,CURDATA0
+    LD HL,32*8+2
+    CALL PRTSTR
+    LD DE,CURDATA0
+    LD HL,32*9+2
+    CALL PRTSTR
+    LD DE,CURDATA0
+    LD HL,32*10+2
+    CALL PRTSTR
+    LD DE,CURDATA0
+    LD HL,32*11+2
+    CALL PRTSTR
+    LD DE,CURDATA0
+    LD HL,32*12+2
+    CALL PRTSTR
+    LD DE,CURDATA0
+    LD HL,32*13+2
+    CALL PRTSTR
+    LD DE,CURDATA0
+    LD HL,32*14+2
+    CALL PRTSTR
+    LD DE,CURDATA0
+    LD HL,32*15+2
+    CALL PRTSTR
 
-POPALL:
     POP HL
+    LD A,H
+    OR L
+    JR Z,WRTCUR_EXIT
+
+    LD DE,CURDATA1
+    CALL PRTSTR
+
+WRTCUR_EXIT:
     POP DE
     POP BC
-    POP AF
-
     RET
+
 
 
 ; ====================================================================================================
@@ -424,7 +426,7 @@ SOUNDDRV_INIT:
     LD HL,SOUNDDRV_WK_NOISETONE_SFX
     LD (HL),0    
 
-    LD HL,SOUNDDRV_WK_VOL
+    LD HL,SOUNDDRV_WK_VOL_BGM
     LD (HL),0
     INC HL
     LD (HL),0
@@ -452,6 +454,7 @@ SOUNDDRV_INIT_2:
 ;              トラック3のデータアドレス:2byte
 ; ====================================================================================================
 SOUNDDRV_PLAY:
+    DI
     PUSH AF
     PUSH BC
     PUSH DE
@@ -511,6 +514,7 @@ SOUNDDRV_PLAY_L1:
     POP DE
     POP BC
     POP AF
+    EI
 
     RET
 
@@ -525,6 +529,7 @@ SOUNDDRV_PLAY_L1:
 ;              トラック3のデータアドレス:2byte ゼロ=なし
 ; ====================================================================================================
 SOUNDDRV_SFXPLAY:
+    DI
     PUSH AF
     PUSH BC
     PUSH DE
@@ -584,6 +589,7 @@ SOUNDDRV_SFXPLAY_L1:
     POP DE
     POP BC
     POP AF
+    EI
 
     RET
 
@@ -592,6 +598,7 @@ SOUNDDRV_SFXPLAY_L1:
 ; 演奏停止
 ; ====================================================================================================
 SOUNDDRV_STOP:
+    DI
     PUSH AF
     PUSH BC
     PUSH DE
@@ -628,6 +635,7 @@ SOUNDDRV_STOP_L2:
     POP DE
     POP BC
     POP AF
+    EI
 
     RET
 
@@ -636,10 +644,10 @@ SOUNDDRV_STOP_L2:
 ; 演奏処理
 ; ====================================================================================================
 SOUNDDRV_EXEC:
-    PUSH AF
-    PUSH BC
-    PUSH DE
-    PUSH HL
+;    PUSH AF
+;    PUSH BC
+;    PUSH DE
+;    PUSH HL
 
     ; ■サウンドドライバのステータス判定
     LD A,(SOUNDDRV_STATE)           ; A <- サウンドドライバの状態
@@ -661,13 +669,13 @@ SOUNDDRV_EXEC:
     CALL SOUNDDRV_CHEXEC
 
     ; ■チャンネル全体の処理
-    CALL SOUNDDRV_SETMIXING         ; PSGレジスタ7設定処理
+    CALL SOUNDDRV_SETMIXING         ; ミキシング(PSGレジスタ7)設定処理
 
 SOUNDDRV_EXIT:
-    POP HL
-    POP DE
-    POP BC
-    POP AF
+;    POP HL
+;    POP DE
+;    POP BC
+;    POP AF
 
     RET
 
@@ -770,6 +778,37 @@ SOUNDDRV_CHEXEC_L23:
 
     JP SOUNDDRV_CHEXEC_EXIT
 
+SOUNDDRV_CHEXEC_L3:
+    ; ■終端処理    
+    LD (IX+3),$00                   ; ワークエリアのトラックデータ先頭アドレスをゼロにする
+    LD (IX+4),$00
+    LD (IX+6),%00000011             ; ミキシングをTone,NoiseともにOffにする
+
+    LD A,D                          ; A <- D(トラック番号)
+    AND %00000100                   ; ビット2を調べる(=トラック番号が4〜6か)
+    RET Z                           ; 0(=BGMトラック)ならここで終了する
+
+    ; ■SFXの再生が終了した場合は、以下の処理を行う
+    ;   対象BGMトラックのボリュームを復元
+    LD A,D                          ; A <- D(トラック番号)
+    AND %00000011                   ; トラック番号をチャンネル番号(0〜2)に変換
+    LD B,0                          ; BC <- チャンネル番号
+    LD C,A
+    LD HL,SOUNDDRV_WK_VOL_BGM
+    ADD HL,BC                       ; ボリューム退避WKのアドレス
+    LD E,(HL)                       ; E <- ボリューム
+
+    LD A,D                          ; A <- D(トラック番号)
+    AND %00000011                   ; トラック番号をチャンネル番号(0〜2)に変換
+    ADD A,8                         ; PSGレジスタ8〜10に指定するため+8
+    CALL WRTPSG
+
+    ;@ToDo:トーンの復帰も必要
+    ;      若しくは次のサイクルで強制的に発音させる
+
+SOUNDDRV_CHEXEC_EXIT:
+    RET
+
 SOUNDDRV_CHEXEC_CMD200:
     ; ■ボリューム設定処理
     ;   次のシーケンスデータを取得して、PSGレジスタ8〜10(PSGChA〜C)に設定する
@@ -785,53 +824,77 @@ SOUNDDRV_CHEXEC_CMD200:
     ; ■ボリュームの値を退避
     LD B,0
     LD C,D                          ; D=トラック番号(ここに入った時点で0〜2)
-    LD HL,SOUNDDRV_WK_VOL
+    LD HL,SOUNDDRV_WK_VOL_BGM
     ADD HL,BC                       ; ボリューム退避WKのアドレス
     LD (HL),E
 
+; ----------------------------------------------------------------------------------------------------
+; コマンド：200（ボリューム）設定
+; ----------------------------------------------------------------------------------------------------
+
 SOUNDDRV_CHEXEC_CMD200_L1:
+    ;   次のシーケンスデータを取得して、ワークエリアに設定すると同時にPSGレジスタ8～10に設定する
+    ;   そして次のシーケンスデータの処理を行う
     LD A,D                          ; A <- トラック番号(0〜2, 4〜6)
     AND %00000011                   ; 下位2ビットをチャンネル番号とする
     ADD A,8                         ; PSGレジスタ8〜10に指定するため+8
     CALL WRTPSG
 
-SOUNDDRV_CHEXEC_CMD200_EXIT:
     JP SOUNDDRV_CHEXEC_L2
 
-SOUNDDRV_CHEXEC_CMD210:
-    ; ■デチューン値設定処理
-    ;   次のシーケンスデータを取得して、ワークエリアに設定する
-    ;   そして次のシーケンスデータの処理を行う
-    CALL SOUNDDRV_GETNEXTNATA       ; A <- シーケンスデータ(デチューン値)
-    LD (IX+5),A
-
-    JP SOUNDDRV_CHEXEC_L2
-
+; ----------------------------------------------------------------------------------------------------
+; コマンド：201（ミキシング値）設定
+;   次のシーケンスデータを取得して、ワークエリアに設定すると同時にPSGレジスタ7に設定する
+;   そして次のシーケンスデータの処理を行う
+; ----------------------------------------------------------------------------------------------------
 SOUNDDRV_CHEXEC_CMD201:
-    ; ■ミキシング設定処理
-    ;   次のシーケンスデータを取得して、ワークエリアに設定すると同時にPSGレジスタ7に設定する
-    ;   そして次のシーケンスデータの処理を行う
     CALL SOUNDDRV_GETNEXTNATA       ; A <- シーケンスデータ(ミキシング値)
     LD (IX+6),A
 
     JP SOUNDDRV_CHEXEC_L2
 
+; ----------------------------------------------------------------------------------------------------
+; コマンド：202（ノイズトーン値）設定
+;   次のシーケンスデータを取得して、ワークエリアに設定する
+;   そして次のシーケンスデータの処理を行う
+; ----------------------------------------------------------------------------------------------------
 
+SOUNDDRV_CHEXEC_CMD202:
+    CALL SOUNDDRV_GETNEXTNATA       ; A <- シーケンスデータ(ノイズトーン値)
+    LD E,A
+    LD A,6
+    CALL WRTPSG
+
+    JP SOUNDDRV_CHEXEC_L2
+
+; ----------------------------------------------------------------------------------------------------
+; コマンド：210（デチューン値）設定
+;   次のシーケンスデータを取得して、ワークエリアに設定する
+;   そして次のシーケンスデータの処理を行う
+; ----------------------------------------------------------------------------------------------------
+SOUNDDRV_CHEXEC_CMD210:
+    CALL SOUNDDRV_GETNEXTNATA       ; A <- シーケンスデータ(デチューン値)
+    LD (IX+5),A
+
+    JP SOUNDDRV_CHEXEC_L2
+
+; ----------------------------------------------------------------------------------------------------
+; ミキシング(PSGレジスタ7)設定処理
+;   現在のワークの設定値からPSGレジスタ7の設定値を求め、WRTPSGを実行する
+;   レジスタ7への設定値は以下となる(0=On,1=Off)
+;     xx000000
+;       |||||bit0:ChA Tone
+;       ||||bit1:ChB Tone
+;       |||bit2:ChC Tone
+;       ||bit3:ChA Noise
+;       |bit4:ChB Noise
+;       bit5:ChC Noise
+;   各トラックのワークには以下で設定
+;     00
+;     |bit0:Tone
+;     bit1:Noise
+; ----------------------------------------------------------------------------------------------------
 SOUNDDRV_SETMIXING:
-    ; ■PSGレジスタ7設定処理
-    ;   現在のワークの設定値からPSGレジスタ7の設定値を求め、WRTPSGを実行する
-    ;   レジスタ7への設定値は以下となる(0=On,1=Off)
-    ;     xx000000
-    ;       |||||bit0:ChA Tone
-    ;       ||||bit1:ChB Tone
-    ;       |||bit2:ChC Tone
-    ;       ||bit3:ChA Noise
-    ;       |bit4:ChB Noise
-    ;       bit5:ChC Noise
-    ;   各トラックのワークには以下で設定
-    ;     00
-    ;     |bit0:Tone
-    ;     bit1:Noise
     LD B,3                          ; ループ回数
 
     LD A,%00
@@ -908,44 +971,6 @@ SOUNDDRV_SETMIXING_L3:
     LD A,7
     CALL WRTPSG
 
-    RET
-
-
-SOUNDDRV_CHEXEC_CMD202:
-    ; ■ノイズトーン設定処理
-    ;   次のシーケンスデータを取得して、ワークエリアに設定する
-    ;   そして次のシーケンスデータの処理を行う
-    CALL SOUNDDRV_GETNEXTNATA       ; A <- シーケンスデータ(ノイズトーン値)
-    LD E,A
-    LD A,6
-    CALL WRTPSG
-
-    JP SOUNDDRV_CHEXEC_L2
-
-
-SOUNDDRV_CHEXEC_L3:
-    ; ■終端処理    
-    LD (IX+3),$00                   ; ワークエリアのトラックデータ先頭アドレスをゼロにする
-    LD (IX+4),$00
-    LD (IX+6),%00000011             ; ミキシングをTone,NoiseともにOffにする
-
-    LD A,D                          ; A <- D(トラック番号)
-    AND %00000100                   ; ビット2を調べる(=トラック番号が4〜6か)
-    RET Z                           ; ゼロ(=BGMトラック)ならここで終了する
-
-    ; ■SFXの再生が終了した場合は、以下の処理を行う
-    ;   対象BGMトラックのボリュームを復元
-    LD A,D                          ; A <- D(トラック番号)
-    AND %00000011                   ; トラック番号をチャンネル番号(0〜2)に変換
-    LD B,0                          ; BC <- チャンネル番号
-    LD C,A
-    LD HL,SOUNDDRV_WK_VOL
-    ADD HL,BC                       ; ボリューム退避WKのアドレス
-    LD E,(HL)                       ; E <- ボリューム
-    ADD A,8                         ; PSGレジスタ8〜10に指定するため+8
-    CALL WRTPSG
-
-SOUNDDRV_CHEXEC_EXIT:
     RET
 
 ; ----------------------------------------------------------------------------------------------------
@@ -1042,6 +1067,7 @@ BDRCLR:                 EQU $F3EB   ; 周辺色
 LINL32:                 EQU $F3AF   ; WIDTH値
 CLIKSW:                 EQU $F3DB   ; キークリックスイッチ(0:OFF,0以外:ON)
 INTCNT:                 EQU $FCA2   ; システムで1/60秒でインクリメントするワークエリア
+H_TIMI:					EQU $FD9F   ; 垂直帰線割り込みフック
 
 ; ■VRAMワークエリアアドレス定義
 PTN_GEN_ADDR:           EQU $0000   ; VRAM パターンジェネレータテーブルの先頭アドレス
@@ -1491,9 +1517,9 @@ STRDATA10:
 	DB "[8] SFX(XEVIOUS DESTRUCTION)",0
 STRDATA11:
     DW 32*15+3
-	DB "[9] SFX(XEVIOUS BACULLA)",0
+	DB "[9] SFX(XEVIOUS BACURA)",0
 STRDATA12:
-    DW 32*15+3
+    DW 32*17+3
 	DB "[0] STOP",0
 CURDATA0:
     DB " ",0
@@ -1523,7 +1549,13 @@ SOUNDDRV_WK_NOISETONE_BGM:
     DB  0                           ; PSGレジスタ6のWK(BGM)
 SOUNDDRV_WK_NOISETONE_SFX:
     DB  0                           ; PSGレジスタ6のWK(SFX)
-SOUNDDRV_WK_VOL:
+
+SOUNDDRV_WK_TONE_BGM:
+    DW  $0000                       ; PSGレジスタ0,1(BGMトラック1)
+    DW  $0000                       ; PSGレジスタ2,3(BGMトラック2)
+    DW  $0000                       ; PSGレジスタ4,5(BGMトラック3)
+
+SOUNDDRV_WK_VOL_BGM:
     DB  0                           ; PSGレジスタ8 (BGMトラック1)
     DB  0                           ; PSGレジスタ9 (BGMトラック2)
     DB  0                           ; PSGレジスタ10(BGMトラック3)
